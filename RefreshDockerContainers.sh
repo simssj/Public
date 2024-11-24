@@ -48,7 +48,7 @@ function YN() {  # Improved version as it is LOCALE specific
     if [[ "$yn" =~ $noexpr ]]; then fn_msg_Failure "Exiting per user request." ; exit 5; fi
     echo "Please respond with ${yesword} or ${noword}."
   done
-}
+} # End of function YN
 
 function GetCommandLineParameters() {
   if [[ $# == 0 ]]; then # Specified no containers so do all containers
@@ -81,7 +81,7 @@ printf "Well, then, let's do it!"
     while [[ $# -gt 0 ]]; do
       ((++ParameterIndex))
       case $1 in
-        homeassistant | portainer | prowlarr | radarr | readarr | sabnzbd | sonarr | test | alpine )
+        homeassistant | portainer | prowlarr | radarr | readarr | sabnzbd | sonarr | test | alpine | lidarr)
           ContainersToRefresh=" ${ContainersToRefresh} $1"
           fn_msg_Success "      $1"
           shift
@@ -98,7 +98,7 @@ printf "Well, then, let's do it!"
       esac
     done
   fi
-}
+} # End of function GetCommandLineParameters
 
 function DockerRefresh() {
   Index=$1
@@ -128,7 +128,7 @@ function DockerRefresh() {
       _NewContainerName="<NULL>"
     fi
 
-PullDockerImage
+    PullDockerImage
     
     fn_msg_Status "Creating container: '${Index}'"
     _NewContainerID=$( docker create \
@@ -157,7 +157,7 @@ PullDockerImage
   
   fi
 
-}
+} # End of function DockerRefresh
 
 function GetContainerDetails() {  # 1st param must be the name of a container
   ContainerName="<NULL>" ; ContainerID="<NULL>" ; ContainerStatus="<NULL>"
@@ -169,7 +169,7 @@ function GetContainerDetails() {  # 1st param must be the name of a container
       ContainerID=$( echo "${ContainerStatus}" | awk '{print $1}' )
     fi
   fi
-}
+} # End of function GetContainerDetails
 
 function Main() {
 
@@ -252,6 +252,10 @@ function Main() {
         _Volumes="-v /Volumes/Media/AppData/sonarr:/config -v /Volumes/Media/Downloads:/downloads -v /Volumes/Media/TV:/tv"
         _Image="linuxserver/sonarr:latest"
         ;;
+      lidarr)
+        _Volumes="-v /Volumes/Media/AppData/lidarr:/config -v /Volumes/Media/Downloads:/downloads -v /Volumes/Media/Shit_To_Save/lidarr:/music"
+        _Image="lscr.io/linuxserver/lidarr:latest"
+        ;;
       test | alpine)
         _Volumes="-v /Volumes/Media/AppData/test:/config"
         _Image="alpine:latest"
@@ -268,7 +272,7 @@ function Main() {
   done
 
   fn_msg_Status "Refreshes completed."
-}
+} # End of function Main
 
 function PullDockerImage() {
   fn_msg_Status "Refreshing image: '${_Image}' for container '${Index}'"
@@ -284,7 +288,7 @@ function PullDockerImage() {
     cat /tmp/PullDockerImageInfo_${_ImageName}.tmp
     exit 6
   fi
-}
+} # End of function PullDockerImage
 
 # Let the games begin:
 # Set the valid Yes / No regex's and respons text(s)
@@ -294,7 +298,7 @@ fn_msg_Info "$0 is starting."
 
 # set -e # Exit on error
 
-DefaultContainerList="sabnzbd sonarr radarr readarr" # Note that portainer is not included by default for... reasons
+DefaultContainerList="sabnzbd sonarr radarr readarr lidarr" # Note that portainer is not included by default for... reasons
 
 GetCommandLineParameters "${@}"
 
