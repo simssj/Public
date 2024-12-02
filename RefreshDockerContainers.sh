@@ -81,7 +81,7 @@ printf "Well, then, let's do it!"
     while [[ $# -gt 0 ]]; do
       ((++ParameterIndex))
       case $1 in
-        homeassistant | portainer | prowlarr | radarr | readarr | sabnzbd | sonarr | test | alpine | lidarr)
+        homeassistant | portainer | prowlarr | radarr | readarr | sabnzbd | sonarr | test | alpine | lidarr | caddy | plex )
           ContainersToRefresh=" ${ContainersToRefresh} $1"
           fn_msg_Success "      $1"
           shift
@@ -138,12 +138,12 @@ function DockerRefresh() {
       -e PUID="${_UID}" \
       -e PGID="${_GID}" \
       -e TZ="${_TZ}" \
-      -e UMASK=022 \
+      -e UMASK=022 $_Extras \
       ${_Volumes} \
       ${_Image} )
 
-    if [[ -n ${_NewContainerID} ]]; then
 
+    if [[ -n ${_NewContainerID} ]]; then
       printf "%s" "${UpArrow}"; fn_msg_Success "Created new container: '${Index}'"
       fn_msg_Status "Starting new container: ${Index}"
       Response=$( docker container start ${_NewContainerID} )
@@ -221,7 +221,7 @@ function Main() {
 
   for Index in ${ContainersToRefresh}; do
 
-    _Volumes=""; _Image=""
+    unset _Volumes ; unset _Image ; unset _Extras
 
     case ${Index} in
       homeassistant | home-assistant)
@@ -231,6 +231,16 @@ function Main() {
       portainer)
         _Volumes="-v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data/portainer/portainer"
         _Image="portainer/portainer-ce:latest"
+        ;;
+      caddy)
+        _Volumes="-v /Volumes/Media/AppData/caddy:/caddy"
+        _Image="caddy:latest"
+        _Extras=" --name=caddy -p 54321:8100 -e EnvTest=EnvTest "
+        ;;
+      plex)
+        _Volumes="-v /Volumes/Media/AppData/Plex/${HOSTNAME}:/config -v /Volumes/Media/TV:/tv -v /Volumes/Media/Movies:/movies -v /Volumes/Media/Music:/music -v /Volumes/Media/Photos:/photo -v /tmp/transcode:/transcode"
+        _Image="linuxserver/plex:latest"
+        _Extras=" --name=plex -e VERSION=docker "
         ;;
       prowlarr)
         _Volumes="-v /Volumes/Media/AppData/prowlarr:/config"
