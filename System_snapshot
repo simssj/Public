@@ -1,9 +1,9 @@
 #!/bin/bash
-# This is "/usr/local/bin/System_snapshot"
+# This is "/usr/local/bin/system_snapshot"
 #
 #
 # To-Do: 
-#   Generalize the discovery of / mounting of an SD card. I'm thinking a blkid search for SD media with a label of DATA (or some such?) maybe?
+#   More generalize the discovery of / mounting of an SD card. I'm thinking a blkid search for SD media with a label of BACKUP (or some such?) maybe?
 #   Detect the target filesystem and if it doesn't support (e.g.:) chown / chmod events remove them from RSYNC_FLAGS
 # e.g., ExFAT file systems benefit from these flags: " --no-perms --no-owner --no-group --no-links --modify-window=2 "
 #
@@ -12,47 +12,18 @@
 #   On the "External" volume, does it make sense -- after completing the backup -- to `tar -czvf SomeName.tgz` that directory and delete it (to save considerable space)?
 #
 
-############################# fn_msg_ functions ##########################################
-function fn_msg_Debug() { # Prints a provided 'debug' message. Try to keep it under ~70 characters
-	[[ ${_INTERACTIVE} == True && -n "$Debug" ]] && printf "\r\e[2K   [\e[93m+\e[0m] "
-	[[ -n "$Debug" ]] && printf "%s\n" "$@"
-} # fn_msg_Info
+readonly _script_name=$(basename "$0")
+readonly _log_dir=/var/log
+readonly _log_file=${_log_dir}/${_script_name}.log
 
-function fn_msg_Info() { # Prints a provided 'info' message. Try to keep it under ~70 characters
-	[[ ${_INTERACTIVE} == True ]] && printf "\r\e[2K   [\e[93mi\e[0m] "
-	printf "%s\n" "$@"
-} # fn_msg_Info
-
-function fn_msg_Status() { # Prints a provided 'status' message. Try to keep it under ~70 characters
-  [[ ${_INTERACTIVE} == True ]] && printf "\r\e[2K       "
-	printf "%s\n" "$@"
-} # fn_msg_Status
-
-function fn_msg_Success() { # Prints a provided 'success' message. Try to keep it under ~70 characters
-	[[ ${_INTERACTIVE} == True ]] && { sleep 1; printf "\r\e[2K   ✅ "; }
-	printf "%s\n" "$@"
-} # fn_msg_Success
-
-function fn_msg_Failure() { # Prints a provided 'failure' message. Try to keep it under ~70 characters
-  [[ ${_INTERACTIVE} == True ]] && printf "\r\e[2K   [\e[91m\xe2\x9d\x8c\e[0m] "
-	printf "%s\n" "$@"
-} # fn_msg_Failure
-############################# End of fn_msg_ functions ######################################
-
-function LOG() {
-    return; ${_CMD} printf "[%s] %s\n" "$(date)" "$@" | tee --append  "${_log_file}"
-} # End of function LOG
+LOG() {
+    ${_CMD} printf "[%s] %s\n" "$(date)" "$@" | tee --append  "${_log_file}"
+}
 
 function TweakPerms() {
 	# This is a first draft at customizing FLAGS based on the capabilities of the target filesystem.
 	# It's currently "trial and error" but would be improved by something based on $( mount | grep ${TARGET} | awk -F' ' '{print $5}' ) where TARGET is the physical target device
 	# Or, better yet, TARGET_FS_TYPE=$( df -h -T ${_mount_point} |grep ^/ | awk '{print $2}' )
-
-# See: https://superuser.com/questions/763366/rsync-seems-to-overwrite-already-existing-file-on-exfat
-
-	fn_msg_status "In function TweakPerms called with ${1}"
-
-	return
 
 	TARGET_FS_TYPE=$( df -h -T ${_mount_point} |grep ^/ | awk '{print $2}' )
 
@@ -83,17 +54,31 @@ function TweakPerms() {
 	[ -f "${TEMPFILE}" ] && rm "${TEMPFILE}"
 } # End of function TweakPerms
 
-fn_MakeLogFiles() { # Set up Log Files:
-	fn_msg_Info "Setting up log files..."
-	${_CMD} touch "${_log_file}"
-	${_CMD} chgrp adm "${_log_file}"
-	${_CMD} chmod 664 "${_log_file}"
-	LOG "${_MSG}"
-} # End of function fn_MakeLogFiles
+_MSG=$( printf "[%s] Starting ${_script_name} as user: %s" "$(date)" "$(whoami)" )
 
-fn_MakeExclusionList() { # Set up Exclusions:
-	fn_msg_Info "Creating Excluded Files list..."
-	cat <<'EOF' > "${_exclude_file}"
+# Check to make sure we can execute sudo commands:
+if [ "$(id -u)" -eq "0" ]; then # Running as root
+  readonly _CMD=""
+else # Not root; can we get sudo?
+  if [ "$(sudo id -u)" -eq "0" ]; then # Yes we can
+    readonly _CMD="sudo"
+    _MSG="${_MSG} with sudo privileges."
+  else
+    printf "[%s] Unable to start %s due to required privileges.\nExiting with error.\n" "$(date)" "${0}"
+    printf "Unable to start %s due to required privileges.\nExiting with error.\n" "${0}" | logger
+    exit 1
+  fi
+fi
+
+# Set up Log Files:
+${_CMD} touch "${_log_file}"
+${_CMD} chgrp adm "${_log_file}"
+${_CMD} chmod 666 "${_log_file}"
+LOG "${_MSG}"
+
+# Set up Exclusions:
+readonly _exclude_file=/tmp/${_script_name}.excludes
+cat <<'EOF' > "${_exclude_file}"
 .AppleDouble/
 .cache/
 .fseventd/
@@ -105,21 +90,22 @@ fn_MakeExclusionList() { # Set up Exclusions:
 Cache/
 /backups/*
 /boot/.fseventsd/*
-dev/*
-lost+found/*
-proc/*
-run/*
-srv/*
-sys/*
-tmp/* 
-data/*
-snap/
+/data/*
+/dev/*
+/etc/pihole/*
+/lost+found
+/mnt/*
+/media/*
+/proc/*
+/run/*
+/snap/
+/sys/*
+/tmp
 /usr/share/man/*
 /var/backups/*
 /var/cache/*
 /var/lib/docker/containers/*
 /var/lib/docker/volumes/backingFsBlockDev
-/var/lib/plexmediaserver/*
 /var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Cache/*
 /var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Media/localhost/*
 /var/lib/rpimonitor/*
@@ -152,164 +138,68 @@ swapfile
 auto.ini
 Autorun.inf
 EOF
-} # End of function MakeExclusionFiles
 
-fn_CleanDockerFiles() { ##### Clean up any lingering Docker cruft:
-	fn_msg_Info "Pruning Stale Docker Files..."
+##### Clean up any lingering Docker cruft:
   if [[ $( ${_CMD} systemctl is-active docker) == "active" ]]; then
     LOG "Pruning Docker subsystem"
     ${_CMD} docker system prune -a --volumes -f
   fi
-} # End of function fn_CleanDockerFiles
 
-fn_FindMMCDeviceTarget() { # One paramater is required; it identies the (required) label on a (potential) mmc block device
-# mmc_Target=$(blkid|grep mmcblk|grep 'LABEL="DATA"')
-# mmc_Target=$(blkid|grep mmcblk|grep 'LABEL="bootfs"')
-# mmc_Target=$(blkid|grep mmcblk|grep 'LABEL="rootfs"')
-fn_msg_Info "Searching for potential MMC / SDCard target..."
-	if [[ -z "${1}" ]]; then
-		_MSG="Error: No target label was indicated in fn_FindMMCDeviceTarget."
-		fn_msg_Debug "$_MSG"
-		LOG "$_MSG"
-		return
-	else
-		lbl=$1
-		unset mmc_Target
-		mmc_Target=$(blkid|grep mmcblk|grep "LABEL=\"${lbl}\"")
-		if [[ -z "${mmc_Target}" ]]; then
-			_MSG="$(printf "No MMC target was found contining label %s." "${lbl}" )"; fn_msg_Debug "$_MSG"
-			LOG "$_MSG"
-			return
-		else
-			unset mmc_Partition
-			unset mmc_Partition_type
-			_MSG=$(printf "MMC Target is: %s.\n" "${mmc_Target}"); fn_msg_Debug "$_MSG"; LOG "$_MSG"
-			mmc_Partition=$(echo "${mmc_Target}"|awk '{print $1}'|tr -d ':')
-			_MSG=$(printf "MMC Partition is: %s.\n" "${mmc_Partition}"); fn_msg_Debug "$_MSG"; LOG "$_MSG"
-			mmc_Partition_type=$(blkid "${mmc_Partition}" | awk '{for(i=1;i<=NF;i++) {if ($i ~ /TYPE=/) print $i}}')
-			_MSG=$(printf "MMC Partition type is: %s.\n" "${mmc_Partition_type}"); fn_msg_Debug "$_MSG"; LOG "$_MSG"
-		fi
-	fi
-} # End of function fn_FindMMCDeviceTarget
+###### Backup root file system to space on SD card:
+  LOG "Creating temporary mount point"
+  _mount_point=$(sudo mktemp -d /tmp/system_snapshot.XXXXX)
+  LOG "Mounting SDCard media."
+  ${_CMD} mount /dev/mmcblk0p2 "${_mount_point}"
+  if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
+    LOG "Apparently the SDCard did not mount correctly."
+  else    # The semaphore file we planted on the SD card is visible in the mount point.
+    LOG "Last backup time: $(date -r ${_mount_point}/.mounted)"
+    LOG "Copying to SDCard is in process..."
+  # FLAGS="${FLAGS} --dry-run"
+  # FLAGS="${FLAGS} --debug=filter "
+    FLAGS=" --links "
+    FLAGS="${FLAGS} --itemize-changes "
+    ${_CMD} rsync --one-file-system \
+      --archive --acls --verbose \
+      --no-specials --no-devices \
+      --delete-during --delete-excluded --recursive \
+      --exclude-from="${_exclude_file}" ${FLAGS} \
+      / "${_mount_point}" 2>&1 | tee --append "${_log_file}"
+    LOG "Resetting semaphore file."
+    ${_CMD} touch "${_mount_point}"/.mounted
+  fi
+  LOG "Unmounting SD Card."
+  ${_CMD} umount -f "${_mount_point}"
+  LOG "Removing temporary mount point: ${_mount_point}"
+  ${_CMD} rm -rf "${_mount_point}"
 
-fn_Backup2MMC() { ###### Backup root file system to space on SD card:
-	if [[ -z "${1}" ]]; then
-		fn_msg_Debug "Error: No target MMC partition was indicated."
-		return
-	else
-		mmc_Partition="${1}"
-		fn_msg_Info "Backing up to ${mmc_Partition} (${mmc_Partition_type})"
-		fn_msg_Info "   Creating temporary mount point"
-		_mount_point=$(sudo mktemp -d /tmp/system_snapshot.XXXXX)
-		fn_msg_Info "   Mounting SDCard media."
-		${_CMD} mount "${mmc_Partition}" "${_mount_point}"
-		if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
-			fn_msg_Failure "Apparently the SDCard did not mount correctly, or lacks the .mounted semaphore file."
-			ls -alh "${_mount_point}"
-		else    # The semaphore file we planted on the SD card is visible in the mount point.
-			fn_msg_Info "   Last backup time: $(date -r ${_mount_point}/.mounted)"
-			fn_msg_Info "   Copying to SDCard is in process..."
-			TweakPerms "${mmc_Partition_type}" # Update FLAGS to add/remove permissions based on file system capabilities
-		  [[ -n "$Debug" ]] && FLAGS="${FLAGS} --debug=filter "
-		  FLAGS="${FLAGS} --dry-run "
-			FLAGS="${FLAGS} --links "
-			FLAGS="${FLAGS} --itemize-changes "
-			${_CMD} echo rsync --one-file-system \
-				--archive --acls --verbose \
-				--no-specials --no-devices \
-				--delete-during --recursive \
-				--exclude-from="${_exclude_file}" ${FLAGS} \
-				/ "${_mount_point}" 2>&1 | tee --append "${_log_file}"
-			LOG "Resetting semaphore file."
-			${_CMD} touch "${_mount_point}"/.mounted
-		fi
-		fn_msg_Info "   Unmounting SD Card."
-		${_CMD} umount -f "${_mount_point}"
-		fn_msg_Info "   Removing temporary mount point: ${_mount_point}"
-		${_CMD} rm -rf "${_mount_point}"
-		fn_msg_Info "Backup to ${mmc_Partition} is complete." 
-	fi
-} # End of function fn_Backup2MMC
+###### Backup root file system to space on external volume:
+  _mount_point=/Volumes/Media/backups/$(hostname)
+  LOG "Verifying ${_mount_point}."
+  if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
+    LOG "File ${_mount_point}/.mounted doesn't exist."
+  else
+    LOG "Last backup time: $(date -r ${_mount_point}/.mounted)"
+    LOG "Copying to ${_mount_point} is in process..."
+    unset FLAGS
+  # FLAGS="${FLAGS} --dry-run"
+  # FLAGS="${FLAGS} --debug=filter "
+		TweakPerms			# This will update FLAGS to add/remove permissions based on file system capabilities
+    FLAGS="${FLAGS} --links "
+    FLAGS="${FLAGS} --itemize-changes "
+    ${_CMD} rsync --one-file-system \
+      --archive --acls --verbose \
+      --no-specials --no-devices \
+      --delete-during --delete-excluded --recursive \
+      --exclude-from="${_exclude_file}" ${FLAGS} \
+      / "${_mount_point}" 2>&1 | tee --append "${_log_file}"
+    LOG "Resetting semaphore file."
+    ${_CMD} touch "${_mount_point}"/.mounted
+  fi
+  LOG "Removing excludes file: ${_exclude_file}"
+  ${_CMD} rm -f "${_exclude_file}"
 
-fn_Backup2External() { ###### Backup root file system to space on external volume:
-	if [[ -z $1 ]]; then
-		fn_msg_Debug "Error: No External Volume Target was indicated."
-		return
-	else
-		_mount_point="$1/backups/$(hostname)"
-		LOG "Verifying ${_mount_point}."
-		if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
-			LOG "File ${_mount_point}/.mounted doesn't exist; apparently the device is not mounted correctly, or lacks the .mounted semaphore file"
-			return
-		else
-			LOG "Last backup time: $(date -r ${_mount_point}/.mounted)"
-			LOG "Copying to ${_mount_point} is in process..."
-			unset FLAGS
-		# FLAGS="${FLAGS} --dry-run"
-		# FLAGS="${FLAGS} --debug=filter "
-			TweakPerms			# This will update FLAGS to add/remove permissions based on file system capabilities
-			FLAGS="${FLAGS} --links "
-			FLAGS="${FLAGS} --itemize-changes "
-			${_CMD} echo rsync --one-file-system \
-				--archive --acls --verbose \
-				--no-specials --no-devices \
-				--delete-during --delete-excluded --recursive \
-				--exclude-from="${_exclude_file}" ${FLAGS} \
-				/ "${_mount_point}" 2>&1 | tee --append "${_log_file}"
-			LOG "Resetting semaphore file."
-			${_CMD} touch "${_mount_point}"/.mounted
-		fi
-		LOG "Removing excludes file: ${_exclude_file}"
-		${_CMD} rm -f "${_exclude_file}"
-	fi
-} # End of function fn_Backup2External
-
-function Main() {
-	readonly _script_name=$(basename "$0")
-	readonly _log_dir=/var/log
-	readonly _log_file=${_log_dir}/${_script_name}.log
-	readonly _exclude_file=/tmp/${_script_name}.excludes
-	readonly mmc_Label="rootfs"
-	readonly external_device="/Volumes/Media"
-
-	unset Debug ;  Debug=True
-	[[ -t 0 ]] && _INTERACTIVE=True || _INTERACTIVE=false
-
-	_MSG=$( printf "[%s] Starting ${_script_name} as user: %s" "$(date)" "$(whoami)" )
-
-	# Check to make sure we can execute sudo commands:
-	if [ "$(id -u)" -eq "0" ]; then # Running as root
-		readonly _CMD=""
-	else # Not root; can we get sudo?
-		if [ "$(sudo id -u)" -eq "0" ]; then # Yes we can
-			readonly _CMD="sudo"
-			_MSG="${_MSG} with sudo privileges."
-		else
-			printf "[%s] Unable to start %s due to required privileges.\nExiting with error.\n" "$(date)" "${0}"
-			printf "Unable to start %s due to required privileges.\nExiting with error.\n" "${0}" | logger
-			exit 1
-		fi
-	fi
-
-	fn_MakeLogFiles
-	fn_MakeExclusionList
-	fn_CleanDockerFiles
-
-	fn_FindMMCDeviceTarget "${mmc_Label}"
-	if [[ -n "${mmc_Partition}" ]]; then
-		fn_Backup2MMC "${mmc_Partition}"
-	fi
-	
-# fn_Backup2External "${external_device}"
-
-	LOG "${_script_name} completed."
-
-}
-
-# set -x
-Main
-# set +x
+LOG "${_script_name} completed."
 
 # And.... exit clean
 exit 0
-
