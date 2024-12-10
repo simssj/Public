@@ -84,6 +84,7 @@ cat <<'EOF' > "${_exclude_file}"
 '/sys/*'
 '/tmp/*'
 'lost\+found/*'
+'/var/log/journal/*'
 .AppleDouble/
 .cache/
 .fseventd/
@@ -111,12 +112,10 @@ Cache/
 /var/backups/*
 /var/cache/*
 /var/lib/docker/containers/*
-/var/lib/docker/overlay2
-/var/lib/docker/image/overlay2
+/var/lib/docker/overlay2/*
+/var/lib/docker/image/overlay2/*
 /var/lib/docker/volumes/backingFsBlockDev
-/var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Cache/*
-/var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Media/localhost/*
-/var/lib/rpimonitor/*
+/var/lib/plexmediaserver/*
 /var/lib/samba/private/msg.sock/*
 /var/log/*.log.*
 /var/log/*.gz
