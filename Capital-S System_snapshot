@@ -1,0 +1,206 @@
+#!/bin/bash
+# This is "/usr/local/bin/system_snapshot"
+#
+#
+# To-Do: 
+#   More generalize the discovery of / mounting of an SD card. I'm thinking a blkid search for SD media with a label of BACKUP (or some such?) maybe?
+#   Detect the target filesystem and if it doesn't support (e.g.:) chown / chmod events remove them from RSYNC_FLAGS
+#   URGENT: If /Volumes/Media/backups/{hostname} (dir) doesn't exist, make it. And then touch it's .mounted semaphore
+#   Give some thought to tar -czvf {hostname}.tgz when done; maybe if a --tar option is passed on the command line?
+# e.g., ExFAT file systems benefit from these flags: " --no-perms --no-owner --no-group --no-links --modify-window=2 "
+
+readonly _script_name=$(basename "$0")
+readonly _log_dir=/var/log
+readonly _log_file=${_log_dir}/${_script_name}.log
+
+LOG() {
+    ${_CMD} printf "[%s] %s\n" "$(date)" "$@" | tee --append  "${_log_file}"
+}
+
+function TweakPerms() {
+	# This is a first draft at customizing FLAGS based on the capabilities of the target filesystem.
+	# It's currently "trial and error" but would be improved by something based on $( mount | grep ${TARGET} | awk -F' ' '{print $5}' ) where TARGET is the physical target device
+	# Or, better yet, TARGET_FS_TYPE=$( df -h -T ${_mount_point} |grep ^/ | awk '{print $2}' )
+
+	TARGET_FS_TYPE=$( df -h -T ${_mount_point} |grep ^/ | awk '{print $2}' )
+
+	echo "Target File System Type is " ""${TARGET_FS_TYPE}""
+
+	TEMPFILE=$(mktemp ${_mount_point}/perm-test.XXX)
+
+	touch "${TEMPFILE}"
+
+	if [ $? != 0 ]; then
+		echo "It doesn't appear I have write permissions to /Volumes/Media/backups/$(hostname)"
+		exit 99
+	else
+		chmod 666 "${TEMPFILE}" &> /dev/null
+		if [ $? != 0 ]; then
+			FLAGS="${FLAGS} --no-perms"
+		fi
+		chgrp staff "${TEMPFILE}" &> /dev/null
+		if [ $? != 0 ]; then
+			FLAGS="${FLAGS} --no-group"
+		fi
+		chown pi "${TEMPFILE}" &> /dev/null
+		if [ $? != 0 ]; then
+			FLAGS="${FLAGS} --no-owner"
+		fi
+	fi
+
+	[ -f "${TEMPFILE}" ] && rm "${TEMPFILE}"
+} # End of function TweakPerms
+
+_MSG=$( printf "[%s] Starting ${_script_name} as user: %s" "$(date)" "$(whoami)" )
+
+# Check to make sure we can execute sudo commands:
+if [ "$(id -u)" -eq "0" ]; then # Running as root
+  readonly _CMD=""
+else # Not root; can we get sudo?
+  if [ "$(sudo id -u)" -eq "0" ]; then # Yes we can
+    readonly _CMD="sudo"
+    _MSG="${_MSG} with sudo privileges."
+  else
+    printf "[%s] Unable to start %s due to required privileges.\nExiting with error.\n" "$(date)" "${0}"
+    printf "Unable to start %s due to required privileges.\nExiting with error.\n" "${0}" | logger
+    exit 1
+  fi
+fi
+
+# Set up Log Files:
+${_CMD} touch "${_log_file}"
+${_CMD} chgrp adm "${_log_file}"
+${_CMD} chmod 666 "${_log_file}"
+LOG "${_MSG}"
+
+# Set up Exclusions:
+readonly _exclude_file=/tmp/${_script_name}.excludes
+cat <<'EOF' > "${_exclude_file}"
+.AppleDouble/
+.cache/
+.fseventd/
+.fseventsd/
+.Spotlight-V100/
+.TemporaryItems/
+.Trashes/
+@eaDir/
+Cache/
+/backups/*
+/boot/.fseventsd/*
+/data/*
+/dev/*
+/etc/pihole/*
+/lost+found
+/mnt/*
+/media/*
+/opt/Docker/AppData/radarr/logs/radarr.*.txt
+/proc/*
+/run/*
+/snap/
+/sys/*
+/tmp
+/usr/share/man/*
+/var/backups/*
+/var/cache/*
+/var/lib/docker/containers/*
+/var/lib/docker/overlay2
+/var/lib/docker/image/overlay2
+/var/lib/docker/volumes/backingFsBlockDev
+/var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Cache/*
+/var/lib/plexmediaserver/Library/Application\ Support/Plex\ Media\ Server/Media/localhost/*
+/var/lib/rpimonitor/*
+/var/lib/samba/private/msg.sock/*
+/var/log/*.log.*
+/var/log/*.gz
+/var/log/journal/*
+/var/log/samba/log*
+/var/*swap*
+/var/tmp
+/Volumes/Media
+/Volumes/TimeMachine/
+*.db-shm
+*.db-wal
+*.blog
+*.db-shm
+*.log.[1-9]
+*.[1-9].log
+*.log*.gz
+.swapfile
+swapfile
+._*
+.apdisk
+.com.*
+.disk_label*
+.DocumentRevisions-V100
+.DS_Store
+.VolumeIcon.icns
+.partial*
+*.in_progress
+auto.ini
+Autorun.inf
+EOF
+
+##### Clean up any lingering Docker cruft:
+  if [[ $( ${_CMD} systemctl is-active docker) != "active" ]]; then
+    LOG "Pruning Docker subsystem"
+    ${_CMD} docker system prune -a --volumes -f
+  fi
+
+###### Backup root file system to space on SD card:
+  LOG "Creating temporary mount point"
+  _mount_point=$(sudo mktemp -d /tmp/system_snapshot.XXXXX)
+  LOG "Mounting SDCard media."
+  ${_CMD} mount /dev/mmcblk0p2 "${_mount_point}"
+  if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
+    LOG "Apparently the SDCard did not mount correctly."
+  else    # The semaphore file we planted on the SD card is visible in the mount point.
+    LOG "Last backup time: $(date -r ${_mount_point}/.mounted)"
+    LOG "Copying to SDCard is in process..."
+    FLAGS=" --links --one-file-system "
+  # FLAGS="${FLAGS} --dry-run"
+  # FLAGS="${FLAGS} --debug=filter "
+  FLAGS="${FLAGS} --itemize-changes "
+    ${_CMD} rsync \
+      --archive --acls --verbose \
+      --no-specials --no-devices \
+      --delete-during --delete-excluded --recursive \
+      --exclude-from="${_exclude_file}" ${FLAGS} \
+      / "${_mount_point}" 2>&1 | tee --append "${_log_file}"
+    LOG "Resetting semaphore file."
+    ${_CMD} touch "${_mount_point}"/.mounted
+  fi
+  LOG "Unmounting SD Card."
+  ${_CMD} umount -f "${_mount_point}"
+  LOG "Removing temporary mount point: ${_mount_point}"
+  ${_CMD} rm -rf "${_mount_point}"
+
+###### Backup root file system to space on external volume:
+  _mount_point=/Volumes/Media/backups/$(hostname)
+  LOG "Verifying ${_mount_point}."
+  if [ ! -f "${_mount_point}"/.mounted ]; then # Don't see the hidden semaphore file, so ...
+    LOG "File ${_mount_point}/.mounted doesn't exist."
+  else
+    LOG "Last backup time: $(date -r ${_mount_point}/.mounted)"
+    LOG "Copying to ${_mount_point} is in process..."
+    unset FLAGS
+  # FLAGS="${FLAGS} --dry-run"
+  # FLAGS="${FLAGS} --debug=filter "
+		TweakPerms			# This will update FLAGS to add/remove permissions based on file system capabilities
+    FLAGS="${FLAGS} --links --one-file-system "
+    FLAGS="${FLAGS} --itemize-changes "
+    ${_CMD} rsync \
+      --archive --acls --xattrs --verbose \
+      --no-specials --no-devices \
+      --delete-during --delete-excluded --recursive \
+      --exclude-from="${_exclude_file}" ${FLAGS} \
+      / "${_mount_point}" 2>&1 | tee --append "${_log_file}"
+    LOG "Resetting semaphore file."
+    ${_CMD} touch "${_mount_point}"/.mounted
+  fi
+  LOG "Removing excludes file: ${_exclude_file}"
+  ${_CMD} rm -f "${_exclude_file}"
+
+LOG "${_script_name} completed."
+
+# And.... exit clean
+exit 0
