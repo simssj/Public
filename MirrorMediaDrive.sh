@@ -26,7 +26,12 @@
 # 5) Print some nice stats, throw a message and gracefully exit
 #
 # 
-
+# To-Do:
+#   - "Zap" the logfile? That's a problem...
+#   - printf --> fn_msg_...
+#   - CLI option to skip system_snapshot?
+#
+#
 ############################# fn_msg_ functions ##########################################
 function fn_msg_Debug() { # Prints a provided 'debug' message. Try to keep it under ~70 characters
 	[[ -n ${_INTERACTIVE} && -n "${_DEBUG}" ]] && printf "\r\e[2K   [\e[93m*\e[0m] "
@@ -71,7 +76,7 @@ function Initialize() {
   unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
   UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
 
-# Exit Codes:
+  # Exit Codes:
   ExitCodeOK=0
   ExitCodeDependencyFailure=99
   ExitCodeDebug=98
@@ -79,7 +84,7 @@ function Initialize() {
   ExitCodeDestBlkid=96
   ExitCodeDestMount=96
 
-# App-specific Variables & Constants:
+  # App-specific Variables & Constants:
   _Source_Mount_Point="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
   _tmp_Destination="NULL"
   _Target_Device_Label="8TB-Media"
@@ -123,7 +128,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
         printf "\t%s\n" "-v | --verbose      <--- Set verbose output."
         printf "\t%s\n" "-z | --zap          <--- Zap existing log file."
         printf "\t%s\n" "--dry-run           <--- Don't actually perform copying."
-        exit "$ExitCodeOK"
+        exit $ExitCodeOK
         ;;
     esac
     shift
@@ -140,13 +145,13 @@ function Main() {
     printf "Error:\n"
     blkid
     printf " * * *    No BlockID was found for %s.\n\n" "$_Target_Device_Label"
-    exit "${ExitCodeDestBlkid}"
+    exit $ExitCodeDestBlkid
   else
     _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
     if [[ -z $_Target_Mount_Point ]]; then
       printf "Error:\n"
       printf " * * *   A device with label %s is attached at %s but is not mounted.\n\n" "$_Target_Device_Label" "$_Target_Device"
-      exit "${ExitCodeDestMount}"
+      exit $ExitCodeDestMount
     else
       _tmp_Destination="${_Target_Mount_Point}"
     fi
@@ -157,7 +162,7 @@ function Main() {
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
 
   if [[ "$_tmp_Destination" == "NULL" ]]; then
-    exit "${ExitCodeDestMount}"
+    exit $ExitCodeDestMount
   else
     printf "\nStarting mirror of %s to %s.\n" "$_Source_Mount_Point" "${_Target_Mount_Point}" 
   fi
@@ -191,7 +196,7 @@ function Main() {
 
   fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
 
-exit
+  [[ -n "${_DEBUG}" ]] && exit $ExitCodeOK
 
   rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
