@@ -21,7 +21,7 @@
 #
 # 3) If there's an executable called "system_snapshot" in the path, run it.
 #
-# 4) Run the rsync.
+# 4) Based on the commandline options, set up the rsync command string and execute it.
 #
 # 5) Print some nice stats, throw a message and gracefully exit
 #
@@ -123,7 +123,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
         printf "\t%s\n" "-v | --verbose      <--- Set verbose output."
         printf "\t%s\n" "-z | --zap          <--- Zap existing log file."
         printf "\t%s\n" "--dry-run           <--- Don't actually perform copying."
-        exit $ExitCodeOK
+        exit "$ExitCodeOK"
         ;;
     esac
     shift
@@ -131,8 +131,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
 } # End of function ParseParams()
 
 function Main() {
-
-# Verify that $_Source_Mount_Point is, in fact, mounted.
+  # Verify that $_Source_Mount_Point is, in fact, mounted.
   _tmpValue=$( mount | grep "$_Source_Mount_Point" )
 
   # Find the location of the Target device:
@@ -153,68 +152,61 @@ function Main() {
     fi
   fi
 
-fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
-fn_msg_Status "_Target_Device is ${_Target_Device}"
-fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
+  fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
+  fn_msg_Status "_Target_Device is ${_Target_Device}"
+  fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
 
-if [[ "$_tmp_Destination" == "NULL" ]]; then
-  exit "${ExitCodeDestMount}"
-else
-  printf "\nStarting mirror of %s to %s.\n" "$_Source_Mount_Point" "$_Target_Mount_Point" 
-fi
-
-# exit "${ExitCodeDebug}"
-
-_df_BEFORE=$(df -h "$_Source_Mount_Point" "$_Target_Mount_Point")
-printf "\n\nDiskFree (before):\n %s\n\n\n" "$_df_BEFORE"
-
-if [[ "$optDryRun" != "TRUE" ]]; then
-  _snapshot=$(which system_snapshot)
-  if [[ -n "$_snapshot" ]]; then
-    fn_msg_Info "Running system_snapshot."  
-    system_snapshot 
+  if [[ "$_tmp_Destination" == "NULL" ]]; then
+    exit "${ExitCodeDestMount}"
   else
-    fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
+    printf "\nStarting mirror of %s to %s.\n" "$_Source_Mount_Point" "${_Target_Mount_Point}" 
   fi
-fi
-_Rsync_Flags="--archive --partial --append --itemize-changes"
 
-if [[ "${optDryRun}" == "TRUE" ]]; then
-  _Rsync_Flags="${_Rsync_Flags} --dry-run" 
-fi
+  _df_BEFORE=$(df -h "$_Source_Mount_Point" "${_Target_Mount_Point}")
+  printf "\n\nDiskFree (before):\n %s\n\n\n" "$_df_BEFORE"
 
-if [[ "${optNoDelete}" != "TRUE" ]]; then
-  _Rsync_Flags="${_Rsync_Flags} --delete" 
-fi
+  if [[ "$optDryRun" != "TRUE" ]]; then
+    _snapshot=$(which system_snapshot)
+    if [[ -n "$_snapshot" ]]; then
+      fn_msg_Info "Running system_snapshot."  
+      system_snapshot 
+    else
+      fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
+    fi
+  fi
 
-if [[ "${optVerbose}" == "TRUE" ]]; then
-  _Rsync_Flags="${_Rsync_Flags} --verbose --progress" 
-fi
+  _Rsync_Flags=" --archive --partial --append --itemize-changes "
 
-rsync "${_Rsync_Flags}" \""${_Source_Mount_Point}/"\" \""$_Target_Mount_Point"\"
+  if [[ "${optDryRun}" == "TRUE" ]]; then
+    _Rsync_Flags+=" --dry-run " 
+  fi
 
-printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
-printf "\n\nDiskFree (after):\n" 
-df -h "$_Source_Mount_Point" "$_Target_Mount_Point"
+  if [[ "${optNoDelete}" != "TRUE" ]]; then
+    _Rsync_Flags+=" --delete " 
+  fi
+
+  if [[ "${optVerbose}" == "TRUE" ]]; then
+    _Rsync_Flags+=" --verbose --progress " 
+  fi
+
+  echo Doing: rsync "${_Rsync_Flags} \"${_Source_Mount_Point}/\" \"${_Target_Mount_Point}\""
+  rsync ${_Rsync_Flags} ${_Source_Mount_Point} ${_Target_Mount_Point}
+
+  printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
+  printf "\n\nDiskFree (after):\n" 
+  df -h "$_Source_Mount_Point" "${_Target_Mount_Point}"
 } # End of function Main()
 
 
 # Let us begin...
 START=$SECONDS
 
-ParseParams $@                       # Start by getting the Command Line Parameters
+ParseParams "$@"                       # Start by getting the Command Line Parameters
 
 Initialize
 
-# echo "Work in Progress -- Come Back Later!"
-# exit $ExitCodeDebug
-
 Main
 
-echo fn_msg_Success "That took $(date -jr $(( $SECONDS - $START ))  +"%M:%S") seconds."
+echo fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
 
 exit $ExitCodeOK
-
-optDebug="TRUE"  # This is just while testing!
-optDryRun=TRUE
-optNoDelete=TRUE
