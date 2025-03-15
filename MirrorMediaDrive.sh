@@ -15,91 +15,17 @@
 #     - Store its device ID for later use
 #
 # 2) Sift thru the output of `blkid` to see if there's a device with a label of '${_Target_Device_Label}'
+#     - If there is, and it's mounted somewhere, proceed. 
+#     otherwise:
+#     - Throw a message and gracefully exit
 #
-# 3) 
+# 3) If there's an executable called "system_snapshot" in the path, run it.
 #
-# 4) 
+# 4) Run the rsync.
 #
-# 5) 
+# 5) Print some nice stats, throw a message and gracefully exit
 #
 # 
-
-function Main() {
-_scriptname=$(basename -s .sh "$0")
-
-_logfile="/tmp/${_scriptname}.log"          # -->> Erase the logfile first?  cp /dev/null ${_logfile}
-exec > >(tee -a "$_logfile") 2>&1
-
-printf "%s is starting; validating environment...\n" $(basename "$0")
-
-_Source_Mount_Point="/Volumes/Media/" 
-_destination="NULL"
-
-_Target_Device_Label="8TB-Media"
-# Find the location of the Target device:
-_Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
-if [[ -z $_Target_Device ]]; then
-  printf "Error:\n"
-  blkid
-  printf " * * *    No BlockID was found for %s.\n\n" "$_Target_Device_Label"
-  exit 0
-else
-  _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
-  if [[ -z $_Target_Mount_Point ]]; then
-    printf "Error:\n"
-    printf " * * *   A device with label %s is attached at %s but is not mounted.\n\n" "$_Target_Device_Label" "$_Target_Device"
-    exit 0
-  else
-    _destination="${_Target_Mount_Point}"
-  fi
-fi
-
-echo _Target_Device_Label is "$_Target_Device_Label"
-echo _Target_Device is "$_Target_Device"
-echo _Target_Mount_Point is "$_Target_Mount_Point"
-
-if [[ "$_destination" == "NULL" ]]; then
-  exit 0
-else
-  printf "\nStarting rsync of %s to %s.\n" "$_Source_Mount_Point" "$_destination" 
-fi
-
-# exit 0
-
-_df_BEFORE=$(df -h "$_Source_Mount_Point" "$_destination")
-printf "\n\nDiskFree (before):\n %s\n\n\n" "$_df_BEFORE"
-
-_snapshot=$(which system_snapshot)
-if [[ -n "$_snapshot" ]]; then
-  printf "Running system_snapshot\n."  
-  system_snapshot 
-else
-  printf "* * * Warning: system_snapshot not found on this system (Skipping).\n"
-fi
-
-rsync --archive --partial --append --itemize-changes "$_Source_Mount_Point" "$_destination" --delete 
-
-printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
-printf "\n\nDiskFree (after):\n" 
-df -h "$_Source_Mount_Point" "$_destination"
-}
-
-function Initialize() {
-  fn_msg_Status "Initializing..."
-
-  unset _DEBUG     #  ;  _DEBUG=TRUE
-  if [[ -n $optDebug ]]; then
-    _DEBUG="TRUE"
-  fi
-
-  unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
-  UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
-
-  # _DEBUG="TRUE"  # This is just while testing!
-
-  fn_msg_Debug " * * * Debug mode is enabled."
-
-}
 
 ############################# fn_msg_ functions ##########################################
 function fn_msg_Debug() { # Prints a provided 'debug' message. Try to keep it under ~70 characters
@@ -128,11 +54,168 @@ function fn_msg_Failure() { # Prints a provided 'failure' message. Try to keep i
 } # fn_msg_Failure
 ############################# End of fn_msg_ functions ######################################
 
+function Initialize() {
+  _scriptname=$(basename -s .sh "$0")
+
+  _logfile="/tmp/${_scriptname}.log"          # -->> Erase the logfile first?  cp /dev/null ${_logfile}
+  exec > >(tee -a "$_logfile") 2>&1
+
+  fn_msg_Status "Initializing $(basename "$0")..." 
+
+  unset _DEBUG     #  ;  _DEBUG=TRUE
+  if [[ -n $optDebug ]]; then
+    _DEBUG="TRUE"
+    fn_msg_Debug " * * * Debug mode is enabled."
+  fi
+
+  unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
+  UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
+
+# Exit Codes:
+  ExitCodeOK=0
+  ExitCodeDependencyFailure=99
+  ExitCodeDebug=98
+  ExitCodeDryRun=97
+  ExitCodeDestBlkid=96
+  ExitCodeDestMount=96
+
+# App-specific Variables & Constants:
+  _Source_Mount_Point="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
+  _tmp_Destination="NULL"
+  _Target_Device_Label="8TB-Media"
+
+} # End of function Initialize
+
+function ParseParams() { # Assumes you are passing this function '$@' from the command line
+  unset optDebug
+  unset optDryRun
+  unset optNoDelete
+  unset optShowExitCodes
+  unset optZapLogFile
+  unset optVerbose
+
+  while [ -n "$1" ]; do
+    case $1 in
+      -d | --debug )
+        optDebug=TRUE
+        ;;
+      -n | --no-delete | --no-del* )
+        optNoDelete=TRUE
+        ;;
+      -s | --show* )
+        optShowExitCodes=TRUE
+        ;;
+      -v | --verbose )
+        optVerbose=TRUE
+        ;;
+      -z | --zap )
+        optZapLogFile=TRUE
+        ;;
+      --dry-run | --dryrun )
+        optDryRun=TRUE
+        ;;
+      * )
+        printf "  %s\n" "Command line options:"
+        printf "\t%s\n" "-h | --help         <--- Show Command line options."
+        printf "\t%s\n" "-d | --debug        <--- Force DEBUG mode ON."
+        printf "\t%s\n" "-n | --no-delete    <--- do not delete files on the destination."
+        printf "\t%s\n" "-s | --show         <--- Show (possible) exit codes for this app."
+        printf "\t%s\n" "-v | --verbose      <--- Set verbose output."
+        printf "\t%s\n" "-z | --zap          <--- Zap existing log file."
+        printf "\t%s\n" "--dry-run           <--- Don't actually perform copying."
+        exit $ExitCodeOK
+        ;;
+    esac
+    shift
+  done
+} # End of function ParseParams()
+
+function Main() {
+
+# Verify that $_Source_Mount_Point is, in fact, mounted.
+  _tmpValue=$( mount | grep "$_Source_Mount_Point" )
+
+  # Find the location of the Target device:
+  _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
+  if [[ -z $_Target_Device ]]; then
+    printf "Error:\n"
+    blkid
+    printf " * * *    No BlockID was found for %s.\n\n" "$_Target_Device_Label"
+    exit "${ExitCodeDestBlkid}"
+  else
+    _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
+    if [[ -z $_Target_Mount_Point ]]; then
+      printf "Error:\n"
+      printf " * * *   A device with label %s is attached at %s but is not mounted.\n\n" "$_Target_Device_Label" "$_Target_Device"
+      exit "${ExitCodeDestMount}"
+    else
+      _tmp_Destination="${_Target_Mount_Point}"
+    fi
+  fi
+
+fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
+fn_msg_Status "_Target_Device is ${_Target_Device}"
+fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
+
+if [[ "$_tmp_Destination" == "NULL" ]]; then
+  exit "${ExitCodeDestMount}"
+else
+  printf "\nStarting mirror of %s to %s.\n" "$_Source_Mount_Point" "$_Target_Mount_Point" 
+fi
+
+# exit "${ExitCodeDebug}"
+
+_df_BEFORE=$(df -h "$_Source_Mount_Point" "$_Target_Mount_Point")
+printf "\n\nDiskFree (before):\n %s\n\n\n" "$_df_BEFORE"
+
+if [[ "$optDryRun" != "TRUE" ]]; then
+  _snapshot=$(which system_snapshot)
+  if [[ -n "$_snapshot" ]]; then
+    fn_msg_Info "Running system_snapshot."  
+    system_snapshot 
+  else
+    fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
+  fi
+fi
+_Rsync_Flags="--archive --partial --append --itemize-changes"
+
+if [[ "${optDryRun}" == "TRUE" ]]; then
+  _Rsync_Flags="${_Rsync_Flags} --dry-run" 
+fi
+
+if [[ "${optNoDelete}" != "TRUE" ]]; then
+  _Rsync_Flags="${_Rsync_Flags} --delete" 
+fi
+
+if [[ "${optVerbose}" == "TRUE" ]]; then
+  _Rsync_Flags="${_Rsync_Flags} --verbose --progress" 
+fi
+
+echo rsync "${_Rsync_Flags}" \""${_Source_Mount_Point}/"\" \""$_Target_Mount_Point"\"
+
+printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
+printf "\n\nDiskFree (after):\n" 
+df -h "$_Source_Mount_Point" "$_Target_Mount_Point"
+} # End of function Main()
+
+
 # Let us begin...
 START=$SECONDS
 
+ParseParams $@                       # Start by getting the Command Line Parameters
+
+Initialize
+
+# echo "Work in Progress -- Come Back Later!"
+# exit $ExitCodeDebug
+
 Main
+
 fn_msg_Success "That took $(date -jr $(( $SECONDS - $START ))  +"%M:%S") seconds."
 
 exit $ExitCodeOK
+
+optDebug="TRUE"  # This is just while testing!
+optDryRun=TRUE
+optNoDelete=TRUE
 
