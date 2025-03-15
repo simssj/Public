@@ -191,7 +191,7 @@ if [[ "${optVerbose}" == "TRUE" ]]; then
   _Rsync_Flags="${_Rsync_Flags} --verbose --progress" 
 fi
 
-echo rsync "${_Rsync_Flags}" \""${_Source_Mount_Point}/"\" \""$_Target_Mount_Point"\"
+rsync "${_Rsync_Flags}" \""${_Source_Mount_Point}/"\" \""$_Target_Mount_Point"\"
 
 printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
 printf "\n\nDiskFree (after):\n" 
@@ -211,11 +211,10 @@ Initialize
 
 Main
 
-fn_msg_Success "That took $(date -jr $(( $SECONDS - $START ))  +"%M:%S") seconds."
+echo fn_msg_Success "That took $(date -jr $(( $SECONDS - $START ))  +"%M:%S") seconds."
 
 exit $ExitCodeOK
 
 optDebug="TRUE"  # This is just while testing!
 optDryRun=TRUE
 optNoDelete=TRUE
-
