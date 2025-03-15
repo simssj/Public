@@ -189,8 +189,11 @@ function Main() {
     _Rsync_Flags+=" --verbose --progress " 
   fi
 
-  echo Doing: rsync "${_Rsync_Flags} \"${_Source_Mount_Point}/\" \"${_Target_Mount_Point}\""
-  rsync ${_Rsync_Flags} ${_Source_Mount_Point} ${_Target_Mount_Point}
+  fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
+
+exit
+
+  rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
   printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
   printf "\n\nDiskFree (after):\n" 
