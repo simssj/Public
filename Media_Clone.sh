@@ -52,7 +52,7 @@ else
   printf "* * * Warning: system_snapshot not found on this system (Skipping).\n"
 fi
 
-rsync --archive --partial --append --itemize-changes "$_source" "$_destination" --delete --dry-run
+rsync --archive --partial --append --itemize-changes "$_source" "$_destination" --delete 
 
 printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
 printf "\n\nDiskFree (after):\n" 
