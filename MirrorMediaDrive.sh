@@ -49,7 +49,7 @@ function fn_msg_Status() { # Prints a provided 'status' message. Try to keep it 
 } # fn_msg_Status
 
 function fn_msg_Success() { # Prints a provided 'success' message. Try to keep it under ~70 characters
-	[[ -n ${_INTERACTIVE} ]] && { sleep 1; printf "\r\e[2K   ✅ "; }
+	[[ -n ${_INTERACTIVE} ]] && { sleep 1; printf "\r\e[2K   [✅] "; }
 	printf "%s\n" "$@"
 } # fn_msg_Success
 
@@ -57,6 +57,13 @@ function fn_msg_Failure() { # Prints a provided 'failure' message. Try to keep i
   printf "\r\e[2K   [\e[91m\xe2\x9d\x8c\e[0m] "
 	printf "%s\n" "$@"
 } # fn_msg_Failure
+
+function fn_msg_Multiline() { # Prints a provided 'multi-line string' with correct left (tab) indent(s)
+	echo "$@" | while IFS= read -r line; do printf "\t%s\n " "$line" ; done
+# The `sed` way doesn't deal well with the first line indentation
+#  echo "     $@" | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/\n        /g'
+} # fn_msg_Multiline
+
 ############################# End of fn_msg_ functions ######################################
 
 function Initialize() {
@@ -95,6 +102,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
   unset optDebug
   unset optDryRun
   unset optNoDelete
+  unset optQuiet
   unset optShowExitCodes
   unset optZapLogFile
   unset optVerbose
@@ -106,6 +114,9 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
         ;;
       -n | --no-delete | --no-del* )
         optNoDelete=TRUE
+        ;;
+      -q | --quiet )
+        optQuiet=TRUE
         ;;
       -s | --show* )
         optShowExitCodes=TRUE
@@ -124,6 +135,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
         printf "\t%s\n" "-h | --help         <--- Show Command line options."
         printf "\t%s\n" "-d | --debug        <--- Force DEBUG mode ON."
         printf "\t%s\n" "-n | --no-delete    <--- do not delete files on the destination."
+        printf "\t%s\n" "-q | --quiet        <--- Squelch rsync output."
         printf "\t%s\n" "-s | --show         <--- Show (possible) exit codes for this app."
         printf "\t%s\n" "-v | --verbose      <--- Set verbose output."
         printf "\t%s\n" "-z | --zap          <--- Zap existing log file."
@@ -142,33 +154,36 @@ function Main() {
   # Find the location of the Target device:
   _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
   if [[ -z $_Target_Device ]]; then
-    printf "Error:\n"
+    fn_msg_Failure "Error:"
     blkid
-    printf " * * *    No BlockID was found for %s.\n\n" "$_Target_Device_Label"
+    fn_msg_Info " * * *    No BlockID was found for ${_Target_Device_Label}"
     exit $ExitCodeDestBlkid
   else
     _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
     if [[ -z $_Target_Mount_Point ]]; then
-      printf "Error:\n"
-      printf " * * *   A device with label %s is attached at %s but is not mounted.\n\n" "$_Target_Device_Label" "$_Target_Device"
+      fn_msg_Failure "Error:"
+      fn_msg_Failure " * * *   A device with label ${_Target_Device_Label} is attached at ${_Target_Device} but is not mounted." 
       exit $ExitCodeDestMount
     else
       _tmp_Destination="${_Target_Mount_Point}"
+      if [[ "$_tmp_Destination" == "NULL" ]]; then
+        fn_msg_Failure "Destination device for mirroring is not valid."
+        exit $ExitCodeDestMount
+      fi
     fi
   fi
 
+  fn_msg_Info "Environment Summary:"
   fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
   fn_msg_Status "_Target_Device is ${_Target_Device}"
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
+  fn_msg_Status ""
+  fn_msg_Info "Starting mirror of ${_Source_Mount_Point} to ${_Target_Mount_Point}"
 
-  if [[ "$_tmp_Destination" == "NULL" ]]; then
-    exit $ExitCodeDestMount
-  else
-    printf "\nStarting mirror of %s to %s.\n" "$_Source_Mount_Point" "${_Target_Mount_Point}" 
-  fi
-
-  _df_BEFORE=$(df -h "$_Source_Mount_Point" "${_Target_Mount_Point}")
-  printf "\n\nDiskFree (before):\n %s\n\n\n" "$_df_BEFORE"
+  _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
+  fn_msg_Status ""
+  fn_msg_Info "DiskFree (before):"
+  fn_msg_Multiline "${_df_BEFORE}"
 
   if [[ "$optDryRun" != "TRUE" ]]; then
     _snapshot=$(which system_snapshot)
@@ -180,7 +195,11 @@ function Main() {
     fi
   fi
 
-  _Rsync_Flags=" --archive --partial --append --itemize-changes "
+  _Rsync_Flags=" --archive --partial --append --verbose "
+
+  if [[ "${optQuiet}" == "TRUE" ]]; then
+    _Rsync_Flags=${_Rsync_Flags/--verbose/} # ${OriginalString/Pattern/NewPattern}
+  fi
 
   if [[ "${optDryRun}" == "TRUE" ]]; then
     _Rsync_Flags+=" --dry-run " 
@@ -191,7 +210,7 @@ function Main() {
   fi
 
   if [[ "${optVerbose}" == "TRUE" ]]; then
-    _Rsync_Flags+=" --verbose --progress " 
+    _Rsync_Flags+=" --itemize-changes --progress " 
   fi
 
   fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
@@ -200,9 +219,14 @@ function Main() {
 
   rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
-  printf "\n\nDiskFree (before):\n %s\n" "$_df_BEFORE"
-  printf "\n\nDiskFree (after):\n" 
-  df -h "$_Source_Mount_Point" "${_Target_Mount_Point}"
+  fn_msg_Status ""
+  fn_msg_Info "DiskFree (before):"
+  fn_msg_Multiline "${_df_BEFORE}"
+  
+  fn_msg_Status ""
+  fn_msg_Info "DiskFree (after):"
+  fn_msg_Multiline "$( df -h ${_Source_Mount_Point} ${_Target_Mount_Point} )"
+  
 } # End of function Main()
 
 
@@ -215,6 +239,23 @@ Initialize
 
 Main
 
-echo fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
+fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
 
 exit $ExitCodeOK
+
+_DEBUG="TRUE"
+fn_msg_Debug "This is fn_msg_Debug"
+fn_msg_Status "This is fn_msg_Status"
+fn_msg_Success "This is fn_msg_Success"
+fn_msg_Failure "This is fn_msg_Failure"
+fn_msg_Info "This is fn_msg_Info"
+
+fn_msg_Status ""
+fn_msg_Info "Output from ls:"
+fn_msg_Multiline "$( ls -alh ./[Mm]* )"
+
+fn_msg_Status ""
+fn_msg_Info "Output from blkid:"
+fn_msg_Multiline "$( blkid )"
+
+exit
