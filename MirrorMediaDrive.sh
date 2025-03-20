@@ -83,7 +83,7 @@ function Initialize() {
   unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
   UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
 
-  fn_msg_Status "Initializing $(basename "$0")..." 
+  fn_msg_Info "Initializing $(basename "$0")..." 
 
   # Exit Codes:
   ExitCodeOK=0
@@ -198,34 +198,13 @@ function Main() {
     fi
   fi
 
-exit 0
-
-  if [[ -z $_Target_Device ]]; then
-    fn_msg_Failure "Error:"
-    blkid
-    fn_msg_Info " * * *    No BlockID was found for ${_Target_Device_Label}"
-    exit $ExitCodeDestBlkid
-  else
-    _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
-    if [[ -z $_Target_Mount_Point ]]; then
-      fn_msg_Failure "Error:"
-      fn_msg_Failure " * * *   A device with label ${_Target_Device_Label} is attached at ${_Target_Device} but is not mounted." 
-      exit $ExitCodeDestMount
-    else
-      _tmp_Destination="${_Target_Mount_Point}"
-      if [[ "$_tmp_Destination" == "NULL" ]]; then
-        fn_msg_Failure "Destination device for mirroring is not valid."
-        exit $ExitCodeDestMount
-      fi
-    fi
-  fi
-
   fn_msg_Info "Environment Summary:"
+  fn_msg_Status "_Source_Mount_Point is ${_Source_Mount_Point}"
   fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
   fn_msg_Status "_Target_Device is ${_Target_Device}"
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
   fn_msg_Status ""
-  fn_msg_Info "Starting mirror of ${_Source_Mount_Point} to ${_Target_Mount_Point}"
+  fn_msg_Info "Starting to mirror ${_Source_Mount_Point} to ${_Target_Mount_Point}"
 
   _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
   fn_msg_Status ""
@@ -240,6 +219,8 @@ exit 0
     else
       fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
     fi
+  else
+    fn_msg_Info "Dry Run option selected; skipping system_snapshot"
   fi
 
   _Rsync_Flags=" --archive --partial --append --verbose "
