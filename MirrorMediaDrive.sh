@@ -67,21 +67,23 @@ function fn_msg_Multiline() { # Prints a provided 'multi-line string' with corre
 ############################# End of fn_msg_ functions ######################################
 
 function Initialize() {
+  # Identify myself
   _scriptname=$(basename -s .sh "$0")
 
+  # Set up logging
   _logfile="/tmp/${_scriptname}.log"          # -->> Erase the logfile first?  cp /dev/null ${_logfile}
   exec > >(tee -a "$_logfile") 2>&1
 
-  fn_msg_Status "Initializing $(basename "$0")..." 
-
-  unset _DEBUG     #  ;  _DEBUG=TRUE
+  # Set up forensic variables
+  unset _DEBUG
   if [[ -n $optDebug ]]; then
     _DEBUG="TRUE"
     fn_msg_Debug " * * * Debug mode is enabled."
   fi
-
   unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
   UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
+
+  fn_msg_Status "Initializing $(basename "$0")..." 
 
   # Exit Codes:
   ExitCodeOK=0
@@ -98,7 +100,7 @@ function Initialize() {
 
 } # End of function Initialize
 
-function ParseParams() { # Assumes you are passing this function '$@' from the command line
+function ParseParameters() { # Assumes you are passing this function '$@' from the command line
   unset optDebug
   unset optDryRun
   unset optNoDelete
@@ -145,7 +147,7 @@ function ParseParams() { # Assumes you are passing this function '$@' from the c
     esac
     shift
   done
-} # End of function ParseParams()
+} # End of function ParseParameters()
 
 function Main() {
   # Verify that $_Source_Mount_Point is, in fact, mounted.
@@ -233,7 +235,7 @@ function Main() {
 # Let us begin...
 START=$SECONDS
 
-ParseParams "$@"                       # Start by getting the Command Line Parameters
+ParseParameters "$@"                       # Start by getting the Command Line Parameters
 
 Initialize
 
