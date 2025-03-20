@@ -9,7 +9,7 @@
 #
 # Rubric: 
 # The flow goes like this:
-# 1) Look for a mounted volume called "${_Source_Mount_Name}"
+# 1) Look for a mounted volume called "${_Source_Mount_Point}"
 #     - If not mounted, throw a message and gracefully exit
 #     otherwise:
 #     - Store its device ID for later use
@@ -95,7 +95,7 @@ function Initialize() {
   ExitCodeDestMount=94
 
   # App-specific Variables & Constants:
-  _Source_Mount_Name="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
+  _Source_Mount_Point="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
   _tmp_Destination="NULL"
   _Target_Device_Label="8TB-Media"
 
@@ -151,26 +151,55 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
 } # End of function ParseParameters()
 
 function Main() {
-  # Verify that $_Source_Mount_Name is, in fact, mounted.
 
-  fn_msg_Info "Checking to see that ${_Source_Mount_Name} is mounted."
-  _Source_Mount_Device=$( mount | grep ${_Source_Mount_Name} | awk '{print $1}' )
-  if [[ -n "${_Source_Mount_Device}" ]]; then
+  # Verify that $_Source_Mount_Point is, in fact, mounted.
+  fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
+  _Source_Device=$( mount | grep ${_Source_Mount_Point} | awk '{print $1}' )
+  if [[ -n "${_Source_Device}" ]]; then
     printf $UpArrow
     if [[ -z $optVerbose ]]; then
-      fn_msg_Success "${_Source_Mount_Name} is mounted"
+      fn_msg_Success "${_Source_Mount_Point} is mounted"
     else
-      fn_msg_Success "${_Source_Mount_Name} is mounted at ${_Source_Mount_Device}"
+      fn_msg_Success "${_Source_Mount_Point} is mounted at ${_Source_Device}"
     fi
   else
-    fn_msg_Failure "${_Source_Mount_Name} is not mounted. Continuing is not possible."
+    fn_msg_Failure "${_Source_Mount_Point} is not mounted. Continuing is not possible."
     exit $ExitCodeSourceMount
+  fi
+
+  # Find the device id of the Target device:
+  fn_msg_Info "Checking Block IDs to see that Target Device ${_Target_Device_Label} exists."
+  _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
+  if [[ -n ${_Target_Device} ]]; then
+    printf $UpArrow
+    if [[ -z $optVerbose ]]; then
+      fn_msg_Success "${_Target_Device_Label} exists."
+    else
+      fn_msg_Success "${_Target_Device_Label} exists at ${_Target_Device}"
+    fi
+  else
+    fn_msg_Failure "${_Target_Device_Label} was not found. Continuing is not possible."
+    [[ -n optDebug ]] && blkid
+    exit $ExitCodeDestMount
+  fi
+
+  # Find the mount point of the Target:
+  fn_msg_Info "Confirming that ${_Target_Device_Label} is mounted."
+  _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
+  if [[ -z ${_Target_Mount_Point} ]]; then
+    fn_msg_Failure "A device with label ${_Target_Device_Label} is attached at ${_Target_Device} but is not mounted." 
+    exit $ExitCodeDestMount
+  else
+    printf $UpArrow 
+    if [[ -z $optVerbose ]]; then
+      fn_msg_Success "${_Target_Device_Label} is mounted."
+    else
+      fn_msg_Success "${_Target_Device_Label} is mounted at ${_Target_Mount_Point}."
+    fi
   fi
 
 exit 0
 
-  # Find the location of the Target device:
-  _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
   if [[ -z $_Target_Device ]]; then
     fn_msg_Failure "Error:"
     blkid
@@ -196,9 +225,9 @@ exit 0
   fn_msg_Status "_Target_Device is ${_Target_Device}"
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
   fn_msg_Status ""
-  fn_msg_Info "Starting mirror of ${_Source_Mount_Name} to ${_Target_Mount_Point}"
+  fn_msg_Info "Starting mirror of ${_Source_Mount_Point} to ${_Target_Mount_Point}"
 
-  _df_BEFORE=$(df -h ${_Source_Mount_Name} ${_Target_Mount_Point})
+  _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
   fn_msg_Status ""
   fn_msg_Info "DiskFree (before):"
   fn_msg_Multiline "${_df_BEFORE}"
@@ -231,11 +260,11 @@ exit 0
     _Rsync_Flags+=" --itemize-changes --progress " 
   fi
 
-  fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Name}/ ${_Target_Mount_Point}")"
+  fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
 
   [[ -n "${_DEBUG}" ]] && exit $ExitCodeOK
 
-  rsync ${_Rsync_Flags} ${_Source_Mount_Name}/ ${_Target_Mount_Point}
+  rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
   fn_msg_Status ""
   fn_msg_Info "DiskFree (before):"
@@ -243,7 +272,7 @@ exit 0
   
   fn_msg_Status ""
   fn_msg_Info "DiskFree (after):"
-  fn_msg_Multiline "$( df -h ${_Source_Mount_Name} ${_Target_Mount_Point} )"
+  fn_msg_Multiline "$( df -h ${_Source_Mount_Point} ${_Target_Mount_Point} )"
   
 } # End of function Main()
 
