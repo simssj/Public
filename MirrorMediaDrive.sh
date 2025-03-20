@@ -44,7 +44,7 @@ function fn_msg_Info() { # Prints a provided 'info' message. Try to keep it unde
 } # fn_msg_Info
 
 function fn_msg_Status() { # Prints a provided 'status' message. Try to keep it under ~70 characters
-  [[ -n ${_INTERACTIVE} ]] && printf "\r\e[2K       "
+  [[ -n ${_INTERACTIVE} ]] && printf "\r\e[2K        "
 	printf "%s\n" "$@"
 } # fn_msg_Status
 
@@ -91,7 +91,8 @@ function Initialize() {
   ExitCodeDebug=98
   ExitCodeDryRun=97
   ExitCodeDestBlkid=96
-  ExitCodeDestMount=96
+  ExitCodeSourceMount=95
+  ExitCodeDestMount=94
 
   # App-specific Variables & Constants:
   _Source_Mount_Point="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
@@ -151,7 +152,20 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
 
 function Main() {
   # Verify that $_Source_Mount_Point is, in fact, mounted.
-  _tmpValue=$( mount | grep "$_Source_Mount_Point" )
+
+  fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
+  _SourceIsMounted=$( mount | grep $_Source_Mount_Point )
+  if [[ -n "${_SourceIsMounted}" ]]; then
+    printf $UpArrow
+    if [[ -z $optVerbose ]]; then
+      fn_msg_Success "${_Source_Mount_Point} is mounted"
+    else
+      fn_msg_Success "${_Source_Mount_Point} is mounted at ${_Source_Mount_Point}"
+    fi
+  else
+    fn_msg_Failure "${_Source_Mount_Point} is not mounted. Continuing is not possible."
+    exit $ExitCodeSourceMount
+  fi
 
   # Find the location of the Target device:
   _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
