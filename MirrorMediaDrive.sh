@@ -247,11 +247,9 @@ function Main() {
 
   rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
-  fn_msg_Status ""
   fn_msg_Info "DiskFree (before):"
   fn_msg_Multiline "${_df_BEFORE}"
   
-  fn_msg_Status ""
   fn_msg_Info "DiskFree (after):"
   fn_msg_Multiline "$( df -h ${_Source_Mount_Point} ${_Target_Mount_Point} )"
   
