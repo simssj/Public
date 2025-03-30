@@ -115,6 +115,9 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
       -d | --debug )
         optDebug=TRUE
         ;;
+      --dry-run | --dryrun )
+        optDryRun=TRUE
+        ;;
       -n | --no-delete | --no-del* )
         optNoDelete=TRUE
         ;;
@@ -124,14 +127,11 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
       -s | --show* )
         optShowExitCodes=TRUE
         ;;
-      -v | --verbose )
-        optVerbose=TRUE
-        ;;
       -z | --zap )
         optZapLogFile=TRUE
         ;;
-      --dry-run | --dryrun )
-        optDryRun=TRUE
+      -v | --verbose )
+        optVerbose=TRUE
         ;;
       * )
         printf "  %s\n" "Command line options:"
@@ -148,6 +148,9 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
     esac
     shift
   done
+  if [[ $optVerbose == TRUE ]]; then
+    echo Report option Flags here because... Verbose
+  fi
 } # End of function ParseParameters()
 
 function Main() {
