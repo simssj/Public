@@ -221,24 +221,23 @@ function ToCloneOrNotToClone() {
 
 function Main() {
 
-  # First phase: Do the rpi-clone functions:
+# First phase: Do the rpi-clone functions:
   if [[ "$optDryRun" == "TRUE" ]]; then
     fn_msg_Info "Dry Run option selected; skipping rpi-Clone"
   else
     ToCloneOrNotToClone
     if [[ "${_DoClone}" == "TRUE" ]]; then
+      rpi_Flags=" -u "
+      [[ "${optVerbose}" == "TRUE" ]] && rpi_Flags+=" -v " 
+      [[ "${optQuiet}" == "TRUE" ]] && rpi_Flags+=" -q " 
       fn_msg_Info "Starting rpi-clone operation."  
-      if [[ "${optVerbose}" == "TRUE" ]]; then
-        rpi-clone -v -u /dev/mmcblk0 -L Rpi-Clone
-      else
-        rpi-clone -u /dev/mmcblk0 -L Rpi-Clone
-      fi
+      [[ -n "${_DEBUG}" ]] && echo rpi-clone ${rpi_TargetDevice} -L ${rpi_DeviceTag} ${rpi_Flags}
+      rpi-clone ${rpi_TargetDevice} -L ${rpi_DeviceTag} ${rpi_Flags}
     fi
   fi
 
-  [[ -n "${_DEBUG}" ]] && return
-
-  # Second phase: proceed to clone /Volumes/Media to /Volumes/Spare:
+# Second phase: proceed to clone /Volumes/Media to /Volumes/Spare:
+  
   # Verify that $_Source_Mount_Point is, in fact, mounted.
   fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
   _Source_Device=$( mount | grep ${_Source_Mount_Point} | awk '{print $1}' )
