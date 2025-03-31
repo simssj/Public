@@ -101,7 +101,7 @@ function Initialize() {
 
 # rpi-clone specific Variables & Constants:
   rpi_RequiredVersion="2.0.25"
-  rpi_TargetDevice="umcblk0"
+  rpi_TargetDevice="mmcblk0"
   rpi_DeviceTag="Rpi-Clone"
 
 } # End of function Initialize
@@ -182,7 +182,7 @@ function ToCloneOrNotToClone() {
     printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone installed version is OK."
   fi
 
-# - Check if there is a device in mmc; skip if not
+# Check if there is a device in mmc; skip if not
   fn_msg_Info "Examining ${rpi_TargetDevice}."
   _tmp=$(lsblk | grep "${rpi_TargetDevice}")
   if [[ -z "$_tmp" ]]; then
@@ -196,13 +196,12 @@ function ToCloneOrNotToClone() {
     fi
   fi
 
-  # - Now check if the boot volume *IS* the mmc; skip if so
+  # Now check if the boot volume *IS* the mmc; skip if so
   _tmp=$(df /boot | grep ^/ | awk '{print $1}')
-  if [[ "$_tmp" =~ "$rpi_TargetDevice" ]]; then
-    echo "Match!"
+  if [[ "$_tmp" =~ "${rpi_TargetDevice}" ]]; then
     fn_msg_Failure "Device ${rpi_TargetDevice} appears to be the boot volume; skipping cloning."  
     fn_msg_Multiline "$(df /boot)"
-    _DoClone=FALSE; return
+    _DoClone=FALSE ; return
   fi
 
   # Finally, check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
@@ -211,8 +210,8 @@ function ToCloneOrNotToClone() {
     printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} contains the \"${rpi_DeviceTag}\" tag and is suitable for cloning."
     _DoClone=TRUE
   else
-      fn_msg_Failure "Device ${rpi_TargetDevice} appears to be the boot volume; skipping cloning."  
-    fn_msg_Multiline "$(df /boot)"
+      fn_msg_Failure "Device ${rpi_TargetDevice} doesn't contain the tag \"${rpi_DeviceTag}\"; skipping cloning."  
+    fn_msg_Multiline "$(blkid|grep "${rpi_TargetDevice}" )"
     _DoClone=FALSE
   fi
 
