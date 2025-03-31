@@ -2,6 +2,8 @@
 # 
 # MirrorMediaToSpare.sh
 # Version 0.0.1 Initial Release
+# Version 0.1.1 Substituted rpi-clone for system_snapshot
+# Version 1.0.0rc1 Reflowed the Tourist Information
 #
 # shellcheck disable=SC2329  # Ignore Unused functions left in for readability
 # shellcheck disable=SC2034  # Ignore Unused variables left in for readability
@@ -28,9 +30,8 @@
 #
 # 
 # To-Do:
-#   - "Zap" the logfile? That's a problem...
-#     To Resolve need to just set the Option Flags in "ParseParams" and then do the needful in "Initialize"
 #   - Examine target drive's filesystem to see it we need to do something about the flags (perms, groups, times, etc.)
+#   - Might think about if partitions on mmcblk0 are mounted when we get here, and they get unmounted by rpi-clone, re-mount them when we're done.
 #
 #
 ############################# fn_msg_ functions ##########################################
