@@ -242,7 +242,7 @@ function Main() {
   fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
   _Source_Device=$( mount | grep ${_Source_Mount_Point} | awk '{print $1}' )
   if [[ -n "${_Source_Device}" ]]; then
-    printf $UpArrow
+    printf "%s" "${UpArrow}"
     if [[ -z $optVerbose ]]; then
       fn_msg_Success "${_Source_Mount_Point} is mounted"
     else
@@ -257,7 +257,7 @@ function Main() {
   fn_msg_Info "Checking Block IDs to see that Target Device ${_Target_Device_Label} exists."
   _Target_Device=$(blkid | grep "${_Target_Device_Label}" | awk -F ':' '{print $1}')
   if [[ -n ${_Target_Device} ]]; then
-    printf $UpArrow
+    printf "%s" "${UpArrow}"
     if [[ -z $optVerbose ]]; then
       fn_msg_Success "${_Target_Device_Label} exists."
     else
@@ -276,7 +276,7 @@ function Main() {
     fn_msg_Failure "A device with label ${_Target_Device_Label} is attached at ${_Target_Device} but is not mounted." 
     exit $ExitCodeDestMount
   else
-    printf $UpArrow 
+    printf "%s" "${UpArrow}"
     if [[ -z $optVerbose ]]; then
       fn_msg_Success "${_Target_Device_Label} is mounted."
     else
