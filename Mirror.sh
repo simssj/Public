@@ -347,14 +347,13 @@ function Main() {
 # Let us begin...
 START=$SECONDS
 
-ParseParameters "$@"                       # Start by getting the Command Line Parameters
+ParseParameters "$@" # Start by getting the Command Line Parameters
 
-Initialize
+#  optDebug="TRUE"   # UnComment for forced debug (testing) mode
 
-# UnEnForce DEBUG for now:
-# _DEBUG="TRUE"
+Initialize           # Set everything up based on command-line options specified 
 
-Main
+Main                 # Get 'er done!
 
 fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
 
