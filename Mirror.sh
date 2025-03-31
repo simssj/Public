@@ -9,27 +9,27 @@
 #
 # Rubric: 
 # The flow goes like this:
-# 1) Look for a mounted volume called "${_Source_Mount_Point}"
-#     - If not mounted, throw a message and gracefully exit
-#     otherwise:
-#     - Store its device ID for later use
+# 1) First, if there's an SD Card in mmcblk0 then do an rpi-clone to back up the OS
 #
-# 2) Sift thru the output of `blkid` to see if there's a device with a label of '${_Target_Device_Label}'
-#     - If there is, and it's mounted somewhere, proceed. 
-#     otherwise:
-#     - Throw a message and gracefully exit
+# 2) Second: Mirror /Volumes/Media to /Volumes/Spare
+#    a) Look for a mounted volume called "${_Source_Mount_Point}"
+#       - If not mounted, throw a message and gracefully exit
+#       otherwise:
+#       - Store its device ID for later use
 #
-# 3) If there's an executable called "system_snapshot" in the path, run it.
+#    b) Sift thru the output of `blkid` to see if there's a device with a label of '${_Target_Device_Label}'
+#      - If there is, and it's mounted somewhere, proceed. 
+#       otherwise:
+#       - Throw a message and gracefully exit
 #
-# 4) Based on the commandline options, set up the rsync command string and execute it.
+#    c) Based on the commandline options, set up the rsync command string and execute it.
 #
-# 5) Print some nice stats, throw a message and gracefully exit
+#    d) Print some nice stats, throw a message and gracefully exit
 #
 # 
 # To-Do:
 #   - "Zap" the logfile? That's a problem...
-#   - printf --> fn_msg_...
-#   - CLI option to skip system_snapshot?
+#   - Examine target drive's filesystem to see it we need to do something about the flags (perms, groups, times, etc.)
 #
 #
 ############################# fn_msg_ functions ##########################################
@@ -94,10 +94,15 @@ function Initialize() {
   ExitCodeSourceMount=95
   ExitCodeDestMount=94
 
-  # App-specific Variables & Constants:
+  # rsync specific Variables & Constants:
   _Source_Mount_Point="/Volumes/Media" # N.B.: This may cause issues as the 'source' of an rsync.
   _tmp_Destination="NULL"
   _Target_Device_Label="8TB-Media"
+
+# rpi-clone specific Variables & Constants:
+  rpi_RequiredVersion="2.0.25"
+  rpi_TargetDevice="umcblk0"
+  rpi_DeviceTag="Rpi-Clone"
 
 } # End of function Initialize
 
@@ -153,8 +158,88 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
   fi
 } # End of function ParseParameters()
 
+function ToCloneOrNotToClone() { 
+  # This function comprises all the checks necessary to determine if mmcblk0 is suitable to receive the rpi-clone
+  local _tmp
+  unset _DoClone
+
+  #  - Check if rpi-clone is installed; skip if not
+  fn_msg_Info "Checking to see if rpi-clone is installed."
+  if [[ -z "$(which rpi-clone)" ]]; then
+    fn_msg_Failure="rpi-clone is not installed; skipping cloning."
+    _DoClone=FALSE; return
+  else
+    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone is installed."
+  fi
+
+#  - Check if rpi-clone version >= 2.0.25; skip if not
+  fn_msg_Info "Checking rpi-clone version."
+  rpi_InstalledVersion=$(rpi-clone --version | awk '{print $NF}')
+  if [[ "${rpi_InstalledVersion}" < "${rpi_RequiredVersion}" ]]; then
+    fn_msg_Failure "Installed rpi-clone version is ${rpi_InstalledVersion} but version ${rpi_RequiredVersion} is required; skipping cloning."
+    _DoClone=FALSE; return
+  else
+    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone installed version is OK."
+  fi
+
+# - Check if there is a device in mmc; skip if not
+  fn_msg_Info "Examining ${rpi_TargetDevice}."
+  _tmp=$(lsblk | grep "${rpi_TargetDevice}")
+  if [[ -z "$_tmp" ]]; then
+    fn_msg_Failure "Device ${rpi_TargetDevice} does not exist; skipping cloning."  
+    _DoClone=FALSE; return
+  else
+    if [[ $(echo "$_tmp" | wc -l) -lt "3" ]]; then
+      fn_msg_Failure "Device ${rpi_TargetDevice} exists but it doesn't look like a valid target for rpi-clone; skipping cloning."  
+      fn_msg_Multiline "$(lsblk | grep "${rpi_TargetDevice}")"
+      _DoClone=FALSE; return
+    fi
+  fi
+
+  # - Now check if the boot volume *IS* the mmc; skip if so
+  _tmp=$(df /boot | grep ^/ | awk '{print $1}')
+  if [[ "$_tmp" =~ "$rpi_TargetDevice" ]]; then
+    echo "Match!"
+    fn_msg_Failure "Device ${rpi_TargetDevice} appears to be the boot volume; skipping cloning."  
+    fn_msg_Multiline "$(df /boot)"
+    _DoClone=FALSE; return
+  fi
+
+  # Finally, check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
+  _tmp=$(blkid|grep "${rpi_TargetDevice}" | grep "${rpi_DeviceTag}" | awk '{print $1}')
+  if [[ "$_tmp" =~ "${rpi_TargetDevice}" ]]; then
+    printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} contains the \"${rpi_DeviceTag}\" tag and is suitable for cloning."
+    _DoClone=TRUE
+  else
+      fn_msg_Failure "Device ${rpi_TargetDevice} appears to be the boot volume; skipping cloning."  
+    fn_msg_Multiline "$(df /boot)"
+    _DoClone=FALSE
+  fi
+
+# If you get here, do this: rpi-clone -v  /dev/mmcblk0 -L Rpi-Clone 
+# Note: If mmcblk0 has mounted partitions, no worries because rpi-clone will dismount them automagically.
+} # End of function ToCloneOrNotToClone
+
 function Main() {
 
+  # First phase: Do the rpi-clone functions:
+  if [[ "$optDryRun" == "TRUE" ]]; then
+    fn_msg_Info "Dry Run option selected; skipping rpi-Clone"
+  else
+    ToCloneOrNotToClone
+    if [[ "${_DoClone}" == "TRUE" ]]; then
+      fn_msg_Info "Starting rpi-clone operation."  
+      if [[ "${optVerbose}" == "TRUE" ]]; then
+        rpi-clone -v -u /dev/mmcblk0 -L Rpi-Clone
+      else
+        rpi-clone -u /dev/mmcblk0 -L Rpi-Clone
+      fi
+    fi
+  fi
+
+  [[ -n "${_DEBUG}" ]] && return
+
+  # Second phase: proceed to clone /Volumes/Media to /Volumes/Spare:
   # Verify that $_Source_Mount_Point is, in fact, mounted.
   fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
   _Source_Device=$( mount | grep ${_Source_Mount_Point} | awk '{print $1}' )
@@ -207,24 +292,13 @@ function Main() {
   fn_msg_Status "_Target_Device is ${_Target_Device}"
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
   fn_msg_Status ""
-  fn_msg_Info "Starting to mirror ${_Source_Mount_Point} to ${_Target_Mount_Point}"
+
+  fn_msg_Info "Mirroring ${_Source_Mount_Point} to ${_Target_Mount_Point}"
 
   _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
   fn_msg_Status ""
   fn_msg_Info "DiskFree (before):"
   fn_msg_Multiline "${_df_BEFORE}"
-
-  if [[ "$optDryRun" != "TRUE" ]]; then
-    _snapshot=$(which system_snapshot)
-    if [[ -n "$_snapshot" ]]; then
-      fn_msg_Info "Running system_snapshot."  
-      system_snapshot 
-    else
-      fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
-    fi
-  else
-    fn_msg_Info "Dry Run option selected; skipping system_snapshot"
-  fi
 
   _Rsync_Flags=" --archive --partial --append --verbose "
 
@@ -246,7 +320,7 @@ function Main() {
 
   fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
 
-  [[ -n "${_DEBUG}" ]] && exit $ExitCodeOK
+  [[ -n "${_DEBUG}" ]] && exit $ExitCodeDebug
 
   rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
@@ -265,6 +339,8 @@ START=$SECONDS
 ParseParameters "$@"                       # Start by getting the Command Line Parameters
 
 Initialize
+
+_DEBUG="TRUE"
 
 Main
 
@@ -288,46 +364,15 @@ fn_msg_Info "Output from blkid:"
 fn_msg_Multiline "$( blkid )"
 
 
-function ToCloneOrNotToClone() { # Determine if we need to clone [br]oot to mmcblk0
-  local _tmp
-  unset _DoClone
-  rpi_RequiredVersion="2.0.25"
-  rpi_TargetDevice="mmcblk0"
-
-  #  - Check if rpi-clone is installed; skip if not
-  fn_msg_Info "Checking to see if rpi-clone is installed."
-  if [[ -z "$(which rpi-clone)" ]]; then
-    fn_msg_Failure="rpi-clone is not installed; skipping cloning."
-    _DoClone=FALSE; return
+  if [[ "$optDryRun" != "TRUE" ]]; then
+    _snapshot=$(which system_snapshot)
+    if [[ -n "$_snapshot" ]]; then
+      fn_msg_Info "Running system_snapshot."  
+      system_snapshot 
+    else
+      fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
+    fi
   else
-    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone is installed."
+    fn_msg_Info "Dry Run option selected; skipping system_snapshot"
   fi
 
-#  - Check if rpi-clone version >= 2.0.25; skip if not
-  fn_msg_Info "Checking rpi-clone version."
-  rpi_InstalledVersion=$(rpi-clone --version | awk '{print $NF}')
-  if [[ "${rpi_InstalledVersion}" < "${rpi_RequiredVersion}" ]]; then
-    fn_msg_Failure "Installed rpi-clone version is ${rpi_InstalledVersion} but version ${rpi_RequiredVersion} is required; skipping cloning."
-    _DoClone=FALSE; return
-  else
-    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone installed version is OK."
-  fi
-
-# - Check if there is a device in mmc; skip if not
-  fn_msg_Info "Examining ${rpi_TargetDevice}."
-  _tmp=$(lsblk | grep "${rpi_TargetDevice}")
-  if [[ $(echo "$_tmp" | wc -l) -lt "3" ]]; then
-    fn_msg_Failure "Device ${rpi_TargetDevice} exists but it doesn't look like a valid target for rpi-clone; skipping cloning."  
-    _DoClone=FALSE; return
-  else
-    printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} exists and has $(echo "$_tmp" | wc -l) segments."
-  fi
-
-# - Check if the boot volume *IS* the mmc; skip if so
-# - Check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
-
-# If mmcblk0 has mounted partitions, no worries because rpi-clone will dismount them automagically.
-# If you get here, do this: rpi-clone -v  /dev/mmcblk0 -L Rpi-Clone 
-_DoClone=TRUE; return
-
-}
