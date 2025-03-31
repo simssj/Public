@@ -29,6 +29,7 @@
 # 
 # To-Do:
 #   - "Zap" the logfile? That's a problem...
+#     To Resolve need to just set the Option Flags in "ParseParams" and then do the needful in "Initialize"
 #   - Examine target drive's filesystem to see it we need to do something about the flags (perms, groups, times, etc.)
 #
 #
@@ -66,24 +67,28 @@ function fn_msg_Multiline() { # Prints a provided 'multi-line string' with corre
 
 ############################# End of fn_msg_ functions ######################################
 
-function Initialize() {
-  # Identify myself
-  _scriptname=$(basename -s .sh "$0")
+function Initialize() { # Assumes that ParseParameters has already been called
+  
+  _scriptname=$(basename -s .sh "$0") # Identify myself
 
   # Set up logging
-  _logfile="/tmp/${_scriptname}.log"          # -->> Erase the logfile first?  cp /dev/null ${_logfile}
+  _logfile="/tmp/${_scriptname}.log" 
   exec > >(tee -a "$_logfile") 2>&1
+
+# Clear out the log file was requested.
+  if [[ $optZapLogFile == "TRUE" ]]; then
+    cp /dev/null "${_logfile}"
+  fi
 
   # Set up forensic variables
   unset _DEBUG
-  if [[ -n $optDebug ]]; then
-    _DEBUG="TRUE"
-    fn_msg_Debug " * * * Debug mode is enabled."
-  fi
+    [[ -n $optDebug ]] && _DEBUG="TRUE"
+  
   unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
-  UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
+    UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
 
   fn_msg_Info "Initializing $(basename "$0")..." 
+  fn_msg_Debug " * * * Debug mode is enabled."
 
   # Exit Codes:
   ExitCodeOK=0
@@ -104,6 +109,32 @@ function Initialize() {
   rpi_TargetDevice="mmcblk0"
   rpi_DeviceTag="Rpi-Clone"
 
+# Time out for a little tourist information:
+  if [[ $optVerbose == "TRUE" ]]; then
+    printf "%s\n" "The following options are set:"
+    printf "        %s is '%s'\n" "optDebug" "${optDebug}"
+    printf "       %s is '%s'\n" "optDryRun" "${optDryRun}"
+    printf "     %s is '%s'\n" "optNoDelete" "${optNoDelete}"
+    printf "        %s is '%s'\n" "optQuiet" "${optQuiet}"
+    printf "    %s is '%s'\n" "optShowCodes" "${optShowCodes}"
+    printf "      %s is '%s'\n" "optVerbose" "${optVerbose}"
+    printf "   %s is '%s'\n" "optZapLogFile" "${optZapLogFile}"
+  fi
+
+  if [[ $optShowCodes == "TRUE" ]]; then
+    printf "%s\n" "Exit Codes provided by this script:"
+    printf "\t%s = %s\n" "ExitCodeOK" "0"
+    printf "\t%s = %s\n" "ExitCodeDependencyFailure" "99"
+    printf "\t%s = %s\n" "ExitCodeDebug " "98"
+    printf "\t%s = %s\n" "ExitCodeDryRun" "97"
+    printf "\t%s = %s\n" "ExitCodeDestBlkid" "96"
+    printf "\t%s = %s\n" "ExitCodeSourceMount" "95"
+    printf "\t%s = %s\n" "ExitCodeDestMount" "94"
+    exit $ExitCodeOK
+  fi
+
+exit
+
 } # End of function Initialize
 
 function ParseParameters() { # Assumes you are passing this function '$@' from the command line
@@ -111,32 +142,32 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
   unset optDryRun
   unset optNoDelete
   unset optQuiet
-  unset optShowExitCodes
-  unset optZapLogFile
+  unset optShowCodes
   unset optVerbose
+  unset optZapLogFile
 
   while [ -n "$1" ]; do
     case $1 in
       -d | --debug )
-        optDebug=TRUE
+        optDebug="TRUE"
         ;;
       --dry-run | --dryrun )
-        optDryRun=TRUE
+        optDryRun="TRUE"
         ;;
-      -n | --no-delete | --no-del* )    # Need to test this wildcard'ing
-        optNoDelete=TRUE
+      -n | --no-del* )    # Need to test this wildcard'ing
+        optNoDelete="TRUE"
         ;;
       -q | --quiet )
-        optQuiet=TRUE
+        optQuiet="TRUE"
         ;;
-      -s | --show* )
-        optShowExitCodes=TRUE
-        ;;
-      -z | --zap )
-        optZapLogFile=TRUE
+      -s | --show* )    # MOVE THIS CODE TO INITIALIZE OR SIMILAR
+        optShowCodes="TRUE"
         ;;
       -v | --verbose )
-        optVerbose=TRUE
+        optVerbose="TRUE"
+        ;;
+      -z | --zap )
+        optZapLogFile="TRUE"
         ;;
       * )
         printf "  %s\n" "Command line options:"
@@ -153,9 +184,6 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
     esac
     shift
   done
-  if [[ $optVerbose == TRUE ]]; then
-    echo Report option Flags here because... Verbose
-  fi
 } # End of function ParseParameters()
 
 function ToCloneOrNotToClone() { 
@@ -172,7 +200,7 @@ function ToCloneOrNotToClone() {
     printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone is installed."
   fi
 
-#  - Check if rpi-clone version >= 2.0.25; skip if not
+# Check if rpi-clone version >= 2.0.25; skip if not
   fn_msg_Info "Checking rpi-clone version."
   rpi_InstalledVersion=$(rpi-clone --version | awk '{print $NF}')
   if [[ "${rpi_InstalledVersion}" < "${rpi_RequiredVersion}" ]]; then
@@ -196,7 +224,7 @@ function ToCloneOrNotToClone() {
     fi
   fi
 
-  # Now check if the boot volume *IS* the mmc; skip if so
+# Now check if the boot volume *IS* the mmc; skip if so
   _tmp=$(df /boot | grep ^/ | awk '{print $1}')
   if [[ "$_tmp" =~ "${rpi_TargetDevice}" ]]; then
     fn_msg_Failure "Device ${rpi_TargetDevice} appears to be the boot volume; skipping cloning."  
@@ -204,7 +232,7 @@ function ToCloneOrNotToClone() {
     _DoClone=FALSE ; return
   fi
 
-  # Finally, check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
+# Finally, check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
   _tmp=$(blkid|grep "${rpi_TargetDevice}" | grep "${rpi_DeviceTag}" | awk '{print $1}')
   if [[ "$_tmp" =~ "${rpi_TargetDevice}" ]]; then
     printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} contains the \"${rpi_DeviceTag}\" tag and is suitable for cloning."
@@ -220,7 +248,6 @@ function ToCloneOrNotToClone() {
 } # End of function ToCloneOrNotToClone
 
 function Main() {
-
 # First phase: Do the rpi-clone functions:
   if [[ "$optDryRun" == "TRUE" ]]; then
     fn_msg_Info "Dry Run option selected; skipping rpi-Clone"
@@ -237,7 +264,6 @@ function Main() {
   fi
 
 # Second phase: proceed to clone /Volumes/Media to /Volumes/Spare:
-  
   # Verify that $_Source_Mount_Point is, in fact, mounted.
   fn_msg_Info "Checking to see that ${_Source_Mount_Point} is mounted."
   _Source_Device=$( mount | grep ${_Source_Mount_Point} | awk '{print $1}' )
@@ -265,8 +291,8 @@ function Main() {
     fi
   else
     fn_msg_Failure "${_Target_Device_Label} was not found. Continuing is not possible."
-    [[ -n optDebug ]] && blkid
-    exit $ExitCodeDestMount
+    [[ -n $optDebug ]] && blkid
+    exit ${ExitCodeDestMount}
   fi
 
   # Find the mount point of the Target:
@@ -274,7 +300,7 @@ function Main() {
   _Target_Mount_Point=$(mount | grep "$_Target_Device" | tail -1 | awk -F ' ' '{print $3}')
   if [[ -z ${_Target_Mount_Point} ]]; then
     fn_msg_Failure "A device with label ${_Target_Device_Label} is attached at ${_Target_Device} but is not mounted." 
-    exit $ExitCodeDestMount
+    exit ${ExitCodeDestMount}
   else
     printf "%s" "${UpArrow}"
     if [[ -z $optVerbose ]]; then
@@ -330,7 +356,8 @@ function Main() {
   
 } # End of function Main()
 
-
+################################## Let's Roll ###############################################
+#
 # Let us begin...
 START=$SECONDS
 
@@ -338,39 +365,11 @@ ParseParameters "$@"                       # Start by getting the Command Line P
 
 Initialize
 
-_DEBUG="TRUE"
+# UnEnForce DEBUG for now:
+# _DEBUG="TRUE"
 
 Main
 
 fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
 
-exit $ExitCodeOK
-
-_DEBUG="TRUE"
-fn_msg_Debug "This is fn_msg_Debug"
-fn_msg_Status "This is fn_msg_Status"
-fn_msg_Success "This is fn_msg_Success"
-fn_msg_Failure "This is fn_msg_Failure"
-fn_msg_Info "This is fn_msg_Info"
-
-fn_msg_Status ""
-fn_msg_Info "Output from ls:"
-fn_msg_Multiline "$( ls -alh ./[Mm]* )"
-
-fn_msg_Status ""
-fn_msg_Info "Output from blkid:"
-fn_msg_Multiline "$( blkid )"
-
-
-  if [[ "$optDryRun" != "TRUE" ]]; then
-    _snapshot=$(which system_snapshot)
-    if [[ -n "$_snapshot" ]]; then
-      fn_msg_Info "Running system_snapshot."  
-      system_snapshot 
-    else
-      fn_msg_Info "* * * Warning: system_snapshot not found on this system (Skipping)."
-    fi
-  else
-    fn_msg_Info "Dry Run option selected; skipping system_snapshot"
-  fi
-
+exit "${ExitCodeOK}"
