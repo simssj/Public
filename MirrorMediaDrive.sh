@@ -118,7 +118,7 @@ function ParseParameters() { # Assumes you are passing this function '$@' from t
       --dry-run | --dryrun )
         optDryRun=TRUE
         ;;
-      -n | --no-delete | --no-del* )
+      -n | --no-delete | --no-del* )    # Need to test this wildcard'ing
         optNoDelete=TRUE
         ;;
       -q | --quiet )
@@ -237,7 +237,7 @@ function Main() {
   fi
 
   if [[ "${optNoDelete}" != "TRUE" ]]; then
-    _Rsync_Flags+=" --delete " 
+    _Rsync_Flags+=" --delete-after " 
   fi
 
   if [[ "${optVerbose}" == "TRUE" ]]; then
@@ -287,4 +287,47 @@ fn_msg_Status ""
 fn_msg_Info "Output from blkid:"
 fn_msg_Multiline "$( blkid )"
 
-exit
+
+function ToCloneOrNotToClone() { # Determine if we need to clone [br]oot to mmcblk0
+  local _tmp
+  unset _DoClone
+  rpi_RequiredVersion="2.0.25"
+  rpi_TargetDevice="mmcblk0"
+
+  #  - Check if rpi-clone is installed; skip if not
+  fn_msg_Info "Checking to see if rpi-clone is installed."
+  if [[ -z "$(which rpi-clone)" ]]; then
+    fn_msg_Failure="rpi-clone is not installed; skipping cloning."
+    _DoClone=FALSE; return
+  else
+    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone is installed."
+  fi
+
+#  - Check if rpi-clone version >= 2.0.25; skip if not
+  fn_msg_Info "Checking rpi-clone version."
+  rpi_InstalledVersion=$(rpi-clone --version | awk '{print $NF}')
+  if [[ "${rpi_InstalledVersion}" < "${rpi_RequiredVersion}" ]]; then
+    fn_msg_Failure "Installed rpi-clone version is ${rpi_InstalledVersion} but version ${rpi_RequiredVersion} is required; skipping cloning."
+    _DoClone=FALSE; return
+  else
+    printf "%s" "$UpArrow"; fn_msg_Success "rpi-clone installed version is OK."
+  fi
+
+# - Check if there is a device in mmc; skip if not
+  fn_msg_Info "Examining ${rpi_TargetDevice}."
+  _tmp=$(lsblk | grep "${rpi_TargetDevice}")
+  if [[ $(echo "$_tmp" | wc -l) -lt "3" ]]; then
+    fn_msg_Failure "Device ${rpi_TargetDevice} exists but it doesn't look like a valid target for rpi-clone; skipping cloning."  
+    _DoClone=FALSE; return
+  else
+    printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} exists and has $(echo "$_tmp" | wc -l) segments."
+  fi
+
+# - Check if the boot volume *IS* the mmc; skip if so
+# - Check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
+
+# If mmcblk0 has mounted partitions, no worries because rpi-clone will dismount them automagically.
+# If you get here, do this: rpi-clone -v  /dev/mmcblk0 -L Rpi-Clone 
+_DoClone=TRUE; return
+
+}
