@@ -133,8 +133,6 @@ function Initialize() { # Assumes that ParseParameters has already been called
     exit $ExitCodeOK
   fi
 
-exit
-
 } # End of function Initialize
 
 function ParseParameters() { # Assumes you are passing this function '$@' from the command line
@@ -326,23 +324,11 @@ function Main() {
 
   _Rsync_Flags=" --archive --partial --append --verbose "
 
-  if [[ "${optQuiet}" == "TRUE" ]]; then
-    _Rsync_Flags=${_Rsync_Flags/--verbose/} # ${OriginalString/Pattern/NewPattern}
-  fi
-
-  if [[ "${optDryRun}" == "TRUE" ]]; then
-    _Rsync_Flags+=" --dry-run " 
-  fi
-
-  if [[ "${optNoDelete}" != "TRUE" ]]; then
-    _Rsync_Flags+=" --delete-after " 
-  fi
-
-  if [[ "${optVerbose}" == "TRUE" ]]; then
-    _Rsync_Flags+=" --itemize-changes --progress " 
-  fi
-
-  fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
+  [[ "${optQuiet}" == "TRUE" ]] && _Rsync_Flags=${_Rsync_Flags/--verbose/} # ${OriginalString/Pattern/NewPattern}
+  [[ "${optDryRun}" == "TRUE" ]] && _Rsync_Flags+=" --dry-run " 
+  [[ "${optNoDelete}" != "TRUE" ]] && _Rsync_Flags+=" --delete-after " 
+  [[ "${optVerbose}" == "TRUE" ]] && _Rsync_Flags+=" --itemize-changes --progress " 
+  [[ "${optVerbose}" == "TRUE" ]] && fn_msg_Info "$(printf "Doing: rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}")"
 
   [[ -n "${_DEBUG}" ]] && exit $ExitCodeDebug
 
@@ -372,4 +358,4 @@ Main
 
 fn_msg_Success "That took $(date -d @$(( SECONDS - START )) +"%M:%S")."
 
-exit "${ExitCodeOK}"
+exit ${ExitCodeOK}
