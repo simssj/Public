@@ -257,7 +257,7 @@ function Main() {
       [[ "${optVerbose}" == "TRUE" ]] && rpi_Flags+=" -v " 
       [[ "${optQuiet}" == "TRUE" ]] && rpi_Flags+=" -q " 
       fn_msg_Info "Starting rpi-clone operation."  
-      [[ -n "${_DEBUG}" ]] && echo rpi-clone ${rpi_TargetDevice} -L ${rpi_DeviceTag} ${rpi_Flags}
+      [[ "${optVerbose}" == "TRUE" ]] && fn_msg_Info "$(printf "   Doing: rpi-clone ${rpi_TargetDevice} -L ${rpi_DeviceTag} ${rpi_Flags}")"
       rpi-clone ${rpi_TargetDevice} -L ${rpi_DeviceTag} ${rpi_Flags}
     fi
   fi
