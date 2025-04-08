@@ -32,6 +32,7 @@
 # To-Do:
 #   - Examine target drive's filesystem to see it we need to do something about the flags (perms, groups, times, etc.)
 #   - Might think about if partitions on mmcblk0 are mounted when we get here, and they get unmounted by rpi-clone, re-mount them when we're done.
+#   - Borrow the code from "system_snapshot" to make a shadow of the mounted filesystem on / onto the target drive. (rpi-clone may not be enough)
 #
 #
 ############################# fn_msg_ functions ##########################################
@@ -111,7 +112,7 @@ function Initialize() { # Assumes that ParseParameters has already been called
   rpi_DeviceTag="Rpi-Clone"
 
 # Time out for a little tourist information:
-  if [[ $optVerbose == "TRUE" ]]; then
+  if [[ $optDebug == "TRUE" ]]; then
     printf "%s\n" "The following options are set:"
     printf "        %s is '%s'\n" "optDebug" "${optDebug}"
     printf "       %s is '%s'\n" "optDryRun" "${optDryRun}"
