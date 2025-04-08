@@ -10,7 +10,7 @@ function fn_msg_Info() { # Prints a provided 'info' message. Try to keep it unde
 } # fn_msg_Info
 
 function fn_msg_Status() { # Prints a provided 'status' message. Try to keep it under ~70 characters
-  [[ -n ${_INTERACTIVE} ]] && printf "\r\e[2K       "
+  [[ -n ${_INTERACTIVE} ]] && printf "\r\e[2K        "
 	printf "%s\n" "$@"
 } # fn_msg_Status
 
