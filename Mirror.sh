@@ -83,8 +83,7 @@ function Initialize() { # Assumes that ParseParameters has already been called
   fi
 
   # Set up forensic variables
-  unset _DEBUG
-    [[ -n $optDebug ]] && _DEBUG="TRUE"
+  unset _DEBUG ; [[ -n $optDebug ]] && _DEBUG="TRUE"
   
   unset _INTERACTIVE ; [[ -t 0 ]] && _INTERACTIVE=TRUE
     UpArrow=$'\e'[A ; [[ -n "${_DEBUG}" || -z ${_INTERACTIVE} ]] && UpArrow=''
@@ -112,7 +111,7 @@ function Initialize() { # Assumes that ParseParameters has already been called
   rpi_DeviceTag="Rpi-Clone"
 
 # Time out for a little tourist information:
-  if [[ $optDebug == "TRUE" ]]; then
+  if [[ $_DEBUG == "TRUE" ]]; then
     printf "%s\n" "The following options are set:"
     printf "        %s is '%s'\n" "optDebug" "${optDebug}"
     printf "       %s is '%s'\n" "optDryRun" "${optDryRun}"
@@ -232,7 +231,7 @@ function ToCloneOrNotToClone() {
     _DoClone=FALSE ; return
   fi
 
-# Finally, check if the 2nd partition on the mmc has the label "Rpi-Clone'; skip if not
+# Finally, check if the 2nd partition on the mmc has the label "rpi-Clone'; skip if not
   _tmp=$(blkid|grep "${rpi_TargetDevice}" | grep "${rpi_DeviceTag}" | awk '{print $1}')
   if [[ "$_tmp" =~ "${rpi_TargetDevice}" ]]; then
     printf "%s" "$UpArrow"; fn_msg_Success "${rpi_TargetDevice} contains the \"${rpi_DeviceTag}\" tag and is suitable for cloning."
@@ -243,7 +242,7 @@ function ToCloneOrNotToClone() {
     _DoClone=FALSE
   fi
 
-# If you get here, do this: rpi-clone -v  /dev/mmcblk0 -L Rpi-Clone 
+# If you get here, do this: rpi-clone -v  /dev/mmcblk0 -L rpi-Clone 
 # Note: If mmcblk0 has mounted partitions, no worries because rpi-clone will dismount them automagically.
 } # End of function ToCloneOrNotToClone
 
@@ -291,7 +290,7 @@ function Main() {
     fi
   else
     fn_msg_Failure "${_Target_Device_Label} was not found. Continuing is not possible."
-    [[ -n $optDebug ]] && blkid
+    [[ -n $_DEBUG ]] && blkid
     exit ${ExitCodeDestMount}
   fi
 
