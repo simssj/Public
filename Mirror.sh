@@ -315,7 +315,6 @@ function Main() {
   fn_msg_Status "_Target_Device_Label is ${_Target_Device_Label}"
   fn_msg_Status "_Target_Device is ${_Target_Device}"
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
-  fn_msg_Status ""
 
   if [[ "${optVerbose}" == "TRUE" ]]; then
     fn_msg_Info "Analyzing files..."
@@ -323,7 +322,7 @@ function Main() {
     _src_files_BEFORE=$(printf "%'d" $(find ${_Source_Mount_Point} | wc -l))
     _dst_files_BEFORE=$(printf "%'d" $(find ${_Target_Mount_Point} | wc -l))
 
-    printf "%s" "$UpArrow"; 
+    printf "%s" "$UpArrow";   fn_msg_Status ""
 
     fn_msg_Multiline "${_df_BEFORE}"
     fn_msg_Info "$(printf "Source contains:      %s files. (before)\n" "${_src_files_BEFORE}")"
