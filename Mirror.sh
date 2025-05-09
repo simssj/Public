@@ -4,6 +4,7 @@
 # Version 0.0.1 Initial Release
 # Version 0.1.1 Substituted rpi-clone for system_snapshot
 # Version 1.0.0rc1 Reflowed the Tourist Information
+# Version 1.1 Added before/after file counts to tourist information
 #
 # shellcheck disable=SC2329  # Ignore Unused functions left in for readability
 # shellcheck disable=SC2034  # Ignore Unused variables left in for readability
@@ -316,12 +317,20 @@ function Main() {
   fn_msg_Status "_Target_Mount_Point is ${_Target_Mount_Point}"
   fn_msg_Status ""
 
-  fn_msg_Info "Mirroring ${_Source_Mount_Point} to ${_Target_Mount_Point}"
+  if [[ "${optVerbose}" == "TRUE" ]]; then
+    fn_msg_Info "Analyzing files..."
+    _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
+    _src_files_BEFORE=$(printf "%'d" $(find ${_Source_Mount_Point} | wc -l))
+    _dst_files_BEFORE=$(printf "%'d" $(find ${_Target_Mount_Point} | wc -l))
 
-  _df_BEFORE=$(df -h ${_Source_Mount_Point} ${_Target_Mount_Point})
-  fn_msg_Status ""
-  fn_msg_Info "DiskFree (before):"
-  fn_msg_Multiline "${_df_BEFORE}"
+    printf "%s" "$UpArrow"; 
+
+    fn_msg_Multiline "${_df_BEFORE}"
+    fn_msg_Info "$(printf "Source contains:      %s files. (before)\n" "${_src_files_BEFORE}")"
+    fn_msg_Info "$(printf "Destination contains: %s files. (before)\n" "${_dst_files_BEFORE}")"
+  fi
+
+  fn_msg_Info "Mirroring ${_Source_Mount_Point} to ${_Target_Mount_Point}"
 
   _Rsync_Flags=" --archive --partial --append --verbose "
 
@@ -335,12 +344,22 @@ function Main() {
 
   rsync ${_Rsync_Flags} ${_Source_Mount_Point}/ ${_Target_Mount_Point}
 
-  fn_msg_Info "DiskFree (before):"
-  fn_msg_Multiline "${_df_BEFORE}"
-  
-  fn_msg_Info "DiskFree (after):"
-  fn_msg_Multiline "$( df -h ${_Source_Mount_Point} ${_Target_Mount_Point} )"
-  
+  if [[ "${optVerbose}" == "TRUE" ]]; then
+    _src_files_AFTER=$(printf "%'d" $(find ${_Source_Mount_Point} | wc -l))
+    _dst_files_AFTER=$(printf "%'d" $(find ${_Target_Mount_Point} | wc -l))
+    fn_msg_Info "DiskFree (before):"
+    fn_msg_Multiline "${_df_BEFORE}"
+    fn_msg_Status ""
+    fn_msg_Info "DiskFree (after):"
+    fn_msg_Multiline "$( df -h ${_Source_Mount_Point} ${_Target_Mount_Point} )"
+
+    fn_msg_Status ""
+    fn_msg_Info "$(printf "Source contained:      %s files. (before)\n" "${_src_files_BEFORE}")"
+    fn_msg_Info "$(printf "Destination contained: %s files. (before)\n" "${_dst_files_BEFORE}")"
+    fn_msg_Info "$(printf "Source now contains:      %s files. (after)\n" "${_src_files_AFTER}")"
+    fn_msg_Info "$(printf "Destination now contains: %s files. (after)\n" "${_dst_files_AFTER}")"
+  fi
+
 } # End of function Main()
 
 ################################## Let's Roll ###############################################
