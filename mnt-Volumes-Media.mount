@@ -1,0 +1,14 @@
+root@home # cat /etc/systemd/system/Volumes-Media.mount 
+[Unit]
+Description=Media volume mount
+
+[Mount]
+What=/dev/disk/by-label/10TB
+Where=/Volumes/Media/
+Type=exfat
+Options=defaults
+fsck.mode=force
+fsck.repair=yes
+
+[Install]
+WantedBy=multi-user.target
