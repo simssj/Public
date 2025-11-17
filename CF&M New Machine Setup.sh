@@ -50,6 +50,11 @@ xcode-select --install
 # Set Remote Management
 # Go to Settings: Sharing...
 
+
+# Disable OS Updates and Notifications:
+defaults write com.apple.SoftwareUpdate MajorOSUserNotificationDate -date "2030-02-07 23:22:47 +0000"
+defaults write com.apple.SoftwareUpdate UserNotificationDate -date "2030-02-07 23:22:47 +0000"
+
 # Install Chrome
 https://www.google.com/chrome/
 
@@ -71,3 +76,6 @@ sudo $HOME/go/bin/tailscale up --accept-routes=true
 sudo $HOME/go/bin/tailscale status
 
 # Login SJS confirmation
+
+# Report System Configuration (Hardware)
+sudo system_profiler SPHardwareDataType # Optional: SPNetworkDataType
