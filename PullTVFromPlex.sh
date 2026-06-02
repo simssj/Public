@@ -2,6 +2,12 @@
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
+# To-do:
+#  If DEST FS supports perms, links, etc... set flags accordingly
+
+
+
+
 # Object to Sync:
 VOLUME=/Volumes/Media
 FOLDER='TV'
@@ -23,12 +29,10 @@ RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
 
 # Confirm Destination
 echo "Checking destination volume: ${VOLUME}..."
-if [[ $OSTYPE == "darwin"* ]]; then
-    # MacOS specific code here
+if [[ $OSTYPE == "darwin"* ]]; then # MacOS specific code here
     echo "   Running on MacOS"
     FoundFlag=$( mount | grep ^/dev | grep Volumes/Media | awk '{print $3}' )
-elif [[ $OSTYPE == "linux"* ]]; then
-    # Linux specific code here
+elif [[ $OSTYPE == "linux"* ]]; then # Linux specific code here
     echo "   Running on Linux"
     FoundFlag=$( lsblk | grep ${VOLUME} | awk '{print $NF}' )
 else
@@ -42,14 +46,15 @@ if [[ $FoundFlag != ${VOLUME} ]]; then
 fi 
 echo "   Volume checks out."
 
-echo "Checking destination folder: ${VOLUME}/${FOLDER}..."
-touch ${VOLUME}/${FOLDER}/@@TEST.FILE@@ 2> /dev/null
+echo "Checking destination folder: ${DEST}..."
+# It's possible that the following not get executed because 'set -e'
+touch ${DEST}/@@TEST.FILE@@ 2> /dev/null
 if [[ $? != 0 ]]; then
-    echo "Something has gone wrong: Folder: ${VOLUME}/${FOLDER} doesn't appear to be writable by you."
+    echo "Something has gone wrong: Folder: ${DEST} doesn't appear to be writable by you."
     exit 99
 fi
-# Don't need to do this as rsync should remove it: rm ${VOLUME}/${FOLDER}/@@TEST.FILE@@ 2> /dev/null
-echo "   Folder checks out."
+# Don't need to do this as rsync is expected to remove it: rm ${VOLUME}/${FOLDER}/@@TEST.FILE@@ 2> /dev/null
+echo "   Destination Folder checks out."
 
 # Confirm SOURCE reachability:
 echo "Checking that the source on $SOURCE_FQDN is mounted and readable for user: $SOURCE_USER..."
