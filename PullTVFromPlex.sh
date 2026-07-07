@@ -4,8 +4,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # To-do:
 #  If DEST FS supports perms, links, etc... set flags accordingly
-
-
+#  Invoke sudo where appropriate (and if perm'ed)
 
 
 # Object to Sync:
@@ -31,7 +30,9 @@ RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
 echo "Checking destination volume: ${VOLUME}..."
 if [[ $OSTYPE == "darwin"* ]]; then # MacOS specific code here
     echo "   Running on MacOS"
-    FoundFlag=$( mount | grep ^/dev | grep Volumes/Media | awk '{print $3}' )
+    set -x
+##  FoundFlag=$( mount | grep ^/dev | grep Volumes/Media | awk '{print $3}' )
+    FoundFlag=$( mount | grep Volumes/Media | awk '{print $3}' )
 elif [[ $OSTYPE == "linux"* ]]; then # Linux specific code here
     echo "   Running on Linux"
     FoundFlag=$( lsblk | grep ${VOLUME} | awk '{print $NF}' )
