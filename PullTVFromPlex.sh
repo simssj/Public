@@ -1,11 +1,12 @@
 #!/bin/bash
 
-set -e # Exit immediately if a command exits with a non-zero status.
+# set -e # Exit immediately if a command exits with a non-zero status.
 
 # To-do:
 #  If DEST FS supports perms, links, etc... set flags accordingly
 #  Invoke sudo where appropriate (and if perm'ed)
 
+echo "Starting TV sync from Plex... at time: $(date)"
 
 # Object to Sync:
 VOLUME=/Volumes/Media
@@ -31,17 +32,17 @@ echo "Checking destination volume: ${VOLUME}..."
 if [[ $OSTYPE == "darwin"* ]]; then # MacOS specific code here
     echo "   Running on MacOS"
     set -x
-##  FoundFlag=$( mount | grep ^/dev | grep Volumes/Media | awk '{print $3}' )
-    FoundFlag=$( mount | grep Volumes/Media | awk '{print $3}' )
+    FoundFlag=$( mount | grep "${VOLUME}" | awk '{print $3}' )
+    # Consider: [ $(mount | grep -c "${VOLUME}") -eq 1 ] && echo "Mounted" || echo "Nope"
 elif [[ $OSTYPE == "linux"* ]]; then # Linux specific code here
     echo "   Running on Linux"
-    FoundFlag=$( lsblk | grep ${VOLUME} | awk '{print $NF}' )
+    FoundFlag=$( lsblk | grep "${VOLUME}" | awk '{print $NF}' )
 else
     echo "Unsupported operating system"
     exit 99
 fi
 
-if [[ $FoundFlag != ${VOLUME} ]]; then
+if [[ "${FoundFlag}" != "${VOLUME}" ]]; then
     echo "Something has gone wrong: Does volume: ${VOLUME} exist on this machine?"
     exit 99
 fi 
