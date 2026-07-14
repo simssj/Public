@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This is AI-generated bash code that purports to provide a single-instance locking mechanism for bash scripts.
+
 # --- Configuration ---
 PIDFILE="/tmp/my_script.pid" # Define a unique path for your lock file
 SCRIPT_NAME=$(basename "$0") # Gets the current script name
