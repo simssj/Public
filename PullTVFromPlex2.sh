@@ -5,10 +5,20 @@
 # To-do:
 #  If DEST FS supports perms, links, etc... set flags accordingly
 #  Invoke sudo where appropriate (and if perm'ed)
+#  Enforce single-instance execution, e.g.:
+#       if [ -f "/tmp/PullTVFromPlex2.lock" ]; then
+#           echo "Another instance of this script is already running."
+#           exit 1
+#       fi
+#       touch "/tmp/PullTVFromPlex2.lock"
+#       trap 'rm -f "/tmp/PullTVFromPlex2.lock"; exit 1' INT TERM
+#  See also: myscript_with_lock.sh in Public repo
 
-echo "Starting TV sync from Plex... at time: $(date)"
+echo "Starting TV sync from Plexmaster... at time: $(date)"
 
 DEBUG=1
+
+unset DEBUG
 
 [ -n "${DEBUG}" ] && set -x || set +x
 
@@ -36,8 +46,9 @@ RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
 
 # Confirm Destination
 echo "Checking destination volume: ${VOLUME}..."
-if [[ $(mount | grep -c "${VOLUME}") != 1 ]]; then
+if [[ $(/sbin/mount | grep -c "${VOLUME}") != 1 ]]; then
     echo "Something has gone wrong: Does volume: ${VOLUME} exist on this machine?"
+    /sbin/mount
     exit 99
 else
     echo "   Volume checks out."
@@ -67,7 +78,7 @@ FS_BEFORE=$(df -h ${DEST} | grep ^/dev | awk '{print $4}')
 
 # Do the deed:
 echo "Syncing ${SOURCE} to ${DEST} (with options: $@)"
-rsync ${RSYNC_FLAGS[@]} ${SOURCE} ${DEST} $@
+/usr/local/bin/rsync ${RSYNC_FLAGS[@]} ${SOURCE} ${DEST} $@
 
 # Gather statistics:
 FS_AFTER=$(df -h ${DEST} | grep ^/dev | awk '{print $4}')
