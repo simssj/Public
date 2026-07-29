@@ -320,3 +320,21 @@ else
 fi
 
 exit 0
+
+## Other stuff 
+
+Readarr replacement? https://github.com/vavallee/bindery/blob/main/docs/DEPLOYMENT.md
+
+  _UID=$( id -u plex )
+  _GID=$( id -g plex )
+
+
+docker run -d \
+  --name bindery   --user ${_UID}:${_GID} \
+  -p 8787:8787 \
+  -e PUID="${_UID}" \
+  -e PGID="${_GID}" \
+  -v /Volumes/Media/AppData/bindery:/config \
+  -v /Volumes/Media/Downloads:/downloads \
+  -v /Volumes/Media/eBooks:/books \
+  ghcr.io/vavallee/bindery:latest
