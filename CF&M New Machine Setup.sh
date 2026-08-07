@@ -18,6 +18,13 @@ exit 0
 # Activate Tailscale
 # Login SJS confirmation
 
+# Prevent sleep while on AC Power:
+#   sudo pmset -c sleep 0
+#
+# Prevent hibernation while on AC Power:
+#   sudo pmset -c hibernatemode 0
+
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 # Detailed instructions
