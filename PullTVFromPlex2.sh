@@ -45,6 +45,10 @@ RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
 [ -n "${DEBUG}" ] && echo "RSYNC_FLAGS: ${RSYNC_FLAGS}"
 
 # Confirm Destination
+#  NB: This fails on Debian, since 'mount' is in /usr/bin/mount.
+#      Consider something like:
+#      mountCmd=$(which mount)
+#      $mountCmd blah-blah-blah 
 echo "Checking destination volume: ${VOLUME}..."
 if [[ $(/sbin/mount | grep -c "${VOLUME}") != 1 ]]; then
     echo "Something has gone wrong: Does volume: ${VOLUME} exist on this machine?"
