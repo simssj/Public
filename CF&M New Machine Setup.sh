@@ -35,7 +35,7 @@ exit 0
 # Create Administrator Account
 #  Full Name: Administrator
 #  Account: admin
-#  Password: Hound Dog
+#  Password: You Ain't Nothing But A...
 
 # Invoke AppleID
 # simssj@gmail.com
@@ -82,7 +82,11 @@ sudo $HOME/go/bin/tailscale up --accept-routes=true
 # Verify Tailscale:
 sudo $HOME/go/bin/tailscale status
 
+# Later, the tailscale host name can be modified by:
+# tailscale up --hostname=NEW-NAME
+
 # Login SJS confirmation
 
 # Report System Configuration (Hardware)
-sudo system_profiler SPHardwareDataType # Optional: SPNetworkDataType
+sudo system_profiler SPHardwareDataType 
+# Optional: append SPNetworkDataType
