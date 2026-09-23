@@ -44,7 +44,6 @@ exit 0
 
 # Set HostName(s)
 MachineName="cfam-$(ifconfig en0 | grep ether | awk '{print $NF}' | tr ':' '-' )"
-MachineName="cfam-mba15-mcd"
 for name in HostName LocalHostName ComputerName; do 
    sudo scutil --set "${name}" "${MachineName}"
 done
