@@ -44,6 +44,7 @@ exit 0
 
 # Set HostName(s)
 MachineName="cfam-$(ifconfig en0 | grep ether | awk '{print $NF}' | tr ':' '-' )"
+MachineName="cfam-mba15-mcd"
 for name in HostName LocalHostName ComputerName; do 
    sudo scutil --set "${name}" "${MachineName}"
 done
@@ -90,3 +91,10 @@ sudo $HOME/go/bin/tailscale status
 # Report System Configuration (Hardware)
 sudo system_profiler SPHardwareDataType 
 # Optional: append SPNetworkDataType
+
+
+# If Remote Screen Sharing isn't working, this may help:
+/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -allowAccessFor -specifiedUsers
+/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -users [adminaccount] -access -on -agent -privs -all -restart -agent
+# REF: https://www.reddit.com/r/macsysadmin/comments/xeufof/system_preferences_screen_sharing_vnc_macos_12x/
+
