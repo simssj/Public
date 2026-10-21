@@ -214,3 +214,13 @@ function Main() {
 
 Main "$@"
 exit $ExitCodeOK 
+
+function fs_type() {
+    findmnt -no FSTYPE -T "$1" 2>/dev/null || stat -f -c %T "$1"
+}
+
+fs_type /home
+
+if [[ "$fstype"* = "ext4" ]]; then
+  printf "ext4"
+fi
