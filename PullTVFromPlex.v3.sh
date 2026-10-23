@@ -102,7 +102,7 @@ function Initialize() {
   ExitCodeUnsupported=2
   ExitCodeNoLocalVolume=3
   ExitCodeNoLocalAccess=4
-  ExitCodeNoRemoteAccess=4
+  ExitCodeNoRemoteAccess=5
 
   ParseCommandLineParams $@
   
@@ -131,7 +131,8 @@ function Initialize() {
 
   # Destination parameters:
   DEST="${VOLUME}/${FOLDER}"
-
+  FSTYPE='Unknown'
+set -x
   # rsync Flags:
   unset RSYNC_FLAGS
   if [[ -n ${optVerbose} ]]; then
@@ -139,17 +140,25 @@ function Initialize() {
   fi
   RSYNC_FLAGS="${RSYNC_FLAGS} --archive --verbose --itemize-changes "
   RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
-  RSYNC_FLAGS="${RSYNC_FLAGS} --no-perms --no-owner --no-group --no-times --no-links "
-
+  [[ ${FSTYPE} == "ext"* } ]] || RSYNC_FLAGS="${RSYNC_FLAGS} --no-perms --no-owner --no-group --no-times --no-links "
+set +x
   [ -n "${_DEBUG}" ] && fn_msg_Debug "RSYNC_FLAGS: ${RSYNC_FLAGS}"
 } # End of function Initialize()
 
+function fs_type() {
+  [[ -z $1 ]] && { printf "error"; return; }
+  findmnt -no FSTYPE -T "$1" 2>/dev/null || stat -f -c %T "$1" 2>/dev/null || printf "error"
+}
+
 function OSCheck() {
+  FSTYPE='Unknown'
   case "$OSTYPE" in
       linux*)
           fn_msg_Debug "Operating System 'linux' detected."
           MOUNT='/usr/bin/mount'
           RSYNC='/usr/bin/rsync'
+          FSTYPE=$(fs_type ${DEST})
+          fn_msg_Debug "Destination FS Type is ${FSTYPE}."
           ;;
       darwin*)
           fn_msg_Debug "Operating System 'MacOS' detected."
@@ -161,8 +170,12 @@ function OSCheck() {
           exit ExitCodeUnsupported
           ;;
   esac  
- [[ ! -x $MOUNT ]] && { fn_msg_Failure "The 'mount' command: '$MOUNT' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
- [[ ! -x $RSYNC ]] && { fn_msg_Failure "The 'rsync' command: '$RSYNC' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
+# Need to clean up the folllowing because $MOUNT or $RSYNC /could be/ null
+ [[ -z $MOUNT -o ! -x $MOUNT ]] && { fn_msg_Failure "The 'mount' command: '$MOUNT' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
+ [[ -z $RSYNC -o ! -x $RSYNC ]] && { fn_msg_Failure "The 'rsync' command: '$RSYNC' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
+
+exit 99
+
 } # End of function OSCheck() 
 
 function Main() {
@@ -178,6 +191,8 @@ function Main() {
   fi 
 
   fn_msg_Status "Checking destination folder: ${DEST}..."
+  [[ ! -d ${DEST} ]] && { fn_msg_Failure "Something has gone wrong: Folder: ${DEST} doesn't exist. Continuing is not possible."; }
+
   touch ${DEST}/@@TEST.FILE@@ 2> /dev/null
   if [[ $? != 0 ]]; then
       fn_msg_Failure "Something has gone wrong: Folder: ${DEST} doesn't appear to be writable by you."
@@ -189,7 +204,7 @@ function Main() {
   # Confirm SOURCE reachability:
   fn_msg_Status "Checking that the source on $SOURCE_FQDN is mounted and readable for user: $SOURCE_USER..."
   if [[ ${SOURCE_FLAG} != $(ssh ${SOURCE_USER}@${SOURCE_FQDN} ls ${SOURCE_FLAG}) ]]; then
-      fn_msg_Failure "Sorry, using credentials ${SOURCE_USER} at ${SOURCE_FQDN} don't expose ${SOURCE_FLAG}"
+      fn_msg_Failure "Sorry, using credentials ${SOURCE_USER} at ${SOURCE_FQDN} doesn't expose ${SOURCE_FLAG}"
       exit $ExitCodeNoRemoteAccess
   else
     fn_msg_Success "Source volume checks out."
@@ -215,8 +230,11 @@ function Main() {
 Main "$@"
 exit $ExitCodeOK 
 
+################# Future World ###########################
+
 function fs_type() {
-    findmnt -no FSTYPE -T "$1" 2>/dev/null || stat -f -c %T "$1"
+  [[ -z $1 ]] && { printf "error"; return; }
+  findmnt -no FSTYPE -T "$1" 2>/dev/null || stat -f -c %T "$1" 2>/dev/null || printf "error"
 }
 
 fs_type /home
@@ -224,3 +242,49 @@ fs_type /home
 if [[ "$fstype"* = "ext4" ]]; then
   printf "ext4"
 fi
+
+function sudo_check() {
+# Check to make sure we can execute sudo commands:
+  DEST_G=$(stat --format '%g' ${DEST})
+  DEST_O=$(stat --format '%u' ${DEST})
+  if [[ "$(id -u)" -eq "0" ]]; then # Running as root
+    SUDO_CMD="sudo"
+  else # Not root; can we get sudo?
+    if [[ "$(sudo id -u)" -eq "0" ]]; then # Yes we can
+      SUDO_CMD="sudo -i -u "
+    else
+      fn_msg_Status "Unable to proceed: Insufficient privileges."
+      exit ExitCodeNoLocalAccess
+    fi
+  fi
+}
+
+
+
+DEST='/Volumes/Media/TV/'
+DEST_G=$(stat --format '%G' ${DEST})
+DEST_O=$(stat --format '%U' ${DEST})
+
+echo Owner: $DEST_O
+echo Group: $DEST_G
+
+
+# On *nix...
+# Confirm DEST is a DIR || bailout
+# Obtain G from DEST || bailout
+  DEST_G=$(stat --format '%G' ${DEST})
+# Confirm G exists || bailout 
+if getent group "$DEST_G" >/dev/null 2>&1; then
+    echo "Group '$DEST_G' is valid and exists."
+else
+    echo "Group '$DEST_G' does not exist."
+fi
+# Obtain O from DEST 
+if id "$DEST_O" &>/dev/null; then
+    echo "User '$DEST_O' exists."
+else
+    echo "User '$DEST_O' does not exist."
+fi
+
+# Confirm that G and O are valid! || bailout
+# 
