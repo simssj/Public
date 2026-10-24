@@ -117,8 +117,6 @@ function Initialize() {
 
   ShowParams
 
-  OSCheck
-
   # Object to Sync:
   VOLUME='/Volumes/Media'
   FOLDER='TV'
@@ -131,8 +129,9 @@ function Initialize() {
 
   # Destination parameters:
   DEST="${VOLUME}/${FOLDER}"
-  FSTYPE='Unknown'
-set -x
+
+  OSCheck
+
   # rsync Flags:
   unset RSYNC_FLAGS
   if [[ -n ${optVerbose} ]]; then
@@ -140,9 +139,9 @@ set -x
   fi
   RSYNC_FLAGS="${RSYNC_FLAGS} --archive --verbose --itemize-changes "
   RSYNC_FLAGS="${RSYNC_FLAGS} --size-only --partial --append --delete-during "
-  [[ ${FSTYPE} == "ext"* } ]] || RSYNC_FLAGS="${RSYNC_FLAGS} --no-perms --no-owner --no-group --no-times --no-links "
-set +x
-  [ -n "${_DEBUG}" ] && fn_msg_Debug "RSYNC_FLAGS: ${RSYNC_FLAGS}"
+# [[ ${FSTYPE} == "ext"* ]] || RSYNC_FLAGS="${RSYNC_FLAGS} --no-perms --no-owner --no-group --no-times --no-links "
+  RSYNC_FLAGS="${RSYNC_FLAGS} --no-perms --no-owner --no-group --no-times --no-links "
+  fn_msg_Debug "RSYNC_FLAGS: ${RSYNC_FLAGS}"
 } # End of function Initialize()
 
 function fs_type() {
@@ -158,7 +157,7 @@ function OSCheck() {
           MOUNT='/usr/bin/mount'
           RSYNC='/usr/bin/rsync'
           FSTYPE=$(fs_type ${DEST})
-          fn_msg_Debug "Destination FS Type is ${FSTYPE}."
+          fn_msg_Debug "Destination FS Type is: '${FSTYPE}'."
           ;;
       darwin*)
           fn_msg_Debug "Operating System 'MacOS' detected."
@@ -171,11 +170,8 @@ function OSCheck() {
           ;;
   esac  
 # Need to clean up the folllowing because $MOUNT or $RSYNC /could be/ null
- [[ -z $MOUNT -o ! -x $MOUNT ]] && { fn_msg_Failure "The 'mount' command: '$MOUNT' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
- [[ -z $RSYNC -o ! -x $RSYNC ]] && { fn_msg_Failure "The 'rsync' command: '$RSYNC' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
-
-exit 99
-
+ [[ -z $MOUNT || ! -x $MOUNT ]] && { fn_msg_Failure "The 'mount' command: '$MOUNT' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
+ [[ -z $RSYNC || ! -x $RSYNC ]] && { fn_msg_Failure "The 'rsync' command: '$RSYNC' is not executable. Continuing is not possible." ; exit "$ExitCodeDependencyFailure" ; }
 } # End of function OSCheck() 
 
 function Main() {
@@ -193,7 +189,7 @@ function Main() {
   fn_msg_Status "Checking destination folder: ${DEST}..."
   [[ ! -d ${DEST} ]] && { fn_msg_Failure "Something has gone wrong: Folder: ${DEST} doesn't exist. Continuing is not possible."; }
 
-  touch ${DEST}/@@TEST.FILE@@ 2> /dev/null
+  touch ${DEST}/@@TEST.FILE@@ 2>/dev/null
   if [[ $? != 0 ]]; then
       fn_msg_Failure "Something has gone wrong: Folder: ${DEST} doesn't appear to be writable by you."
       exit $ExitCodeNoLocalAccess
@@ -231,17 +227,6 @@ Main "$@"
 exit $ExitCodeOK 
 
 ################# Future World ###########################
-
-function fs_type() {
-  [[ -z $1 ]] && { printf "error"; return; }
-  findmnt -no FSTYPE -T "$1" 2>/dev/null || stat -f -c %T "$1" 2>/dev/null || printf "error"
-}
-
-fs_type /home
-
-if [[ "$fstype"* = "ext4" ]]; then
-  printf "ext4"
-fi
 
 function sudo_check() {
 # Check to make sure we can execute sudo commands:
