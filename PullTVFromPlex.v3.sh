@@ -3,6 +3,7 @@
 # FileName: PullTVFromPlex.v3.sh
 #
 # To-do:
+#  Why aren't we doing $(which mount) in the OSCheck inquiry?
 #  If DEST FS supports perms, links, etc... set flags accordingly
 #  Invoke sudo where appropriate (and if perm'ed)
 #  Enforce single-instance execution, e.g.:
@@ -181,7 +182,7 @@ function Main() {
 
   if [[ $($MOUNT | grep -c "${VOLUME}") -ne 1 ]]; then
     fn_msg_Failure "Something has gone wrong: Does volume: ${VOLUME} exist on this machine?"
-    # exit $ExitCodeNoLocalVolume
+    exit $ExitCodeNoLocalVolume
   else
     fn_msg_Success "Local Volume: '$VOLUME' checks out."
   fi 
@@ -211,7 +212,7 @@ function Main() {
 
   # Do the deed:
   fn_msg_Status "Syncing ${SOURCE} to ${DEST} (with options: $@)" # Make this conditional on if options are specified.
-  $RSYNC ${RSYNC_FLAGS[@]} ${SOURCE} ${DEST} $@ --dry-run
+  $RSYNC ${RSYNC_FLAGS[@]} ${SOURCE} ${DEST} $@
 
   # Gather statistics:
   FS_AFTER=$(df -h ${DEST} | grep ^/dev | awk '{print $4}')
